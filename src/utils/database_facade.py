@@ -94,7 +94,7 @@ class DatabaseFacade(BaseModel):
 
         self.conn.rollback()
 
-    def execute(self, sql: str, logger: TasksLogger = None):
+    def execute(self, sql: str, logger: TasksLogger = None): # type: ignore
         """Execute a sql string."""
         if logger:
             logger.debug(" ".join(sql.split()))
@@ -183,7 +183,7 @@ class DatabaseFacade(BaseModel):
                 force_recreate=force_recreate,
             )
 
-    def fetchall(self, query, logger: TasksLogger = None):
+    def fetchall(self, query, logger: TasksLogger = None): # type: ignore
         if logger:
             logger.debug(query.strip())
 
@@ -193,7 +193,7 @@ class DatabaseFacade(BaseModel):
         cursor.close()
         return data
 
-    def fetchone(self, query, logger: TasksLogger = None):
+    def fetchone(self, query, logger: TasksLogger = None): # type: ignore
         if logger:
             logger.debug(query.strip())
 
@@ -203,7 +203,7 @@ class DatabaseFacade(BaseModel):
         cursor.close()
         return data
 
-    def fetchfirst(self, query, logger: TasksLogger = None):
+    def fetchfirst(self, query, logger: TasksLogger = None): # type: ignore
         if logger:
             logger.debug(query.strip())
 
@@ -213,7 +213,7 @@ class DatabaseFacade(BaseModel):
         cursor.close()
         return data
 
-    def insert(self, query: str, data: Any, logger: TasksLogger = None):
+    def insert(self, query: str, data: Any, logger: TasksLogger = None): # type: ignore
         if logger:
             logger.debug(query.strip())
 

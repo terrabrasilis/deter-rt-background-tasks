@@ -4,12 +4,12 @@ import sys
 
 
 class TasksLogger:
-    logger = None
-    logPrefix = ""
+    logger: logging.Logger
+    log_prefix = ""
 
-    def __init__(self, logPrefix=""):
+    def __init__(self, log_prefix=""):
         self.logger = self.get_logger(__name__, sys.stdout)
-        self.logPrefix = logPrefix + " - "
+        self.log_prefix = log_prefix + " - "
 
     def get_handler(self, textio: Any):
         handler = logging.StreamHandler(textio)
@@ -27,19 +27,19 @@ class TasksLogger:
         return logger
 
     def debug(self, msg):
-        self.logger.debug(self.logPrefix + msg)
+        self.logger.debug(self.log_prefix + msg)
 
     def info(self, msg):
-        self.logger.info(self.logPrefix + msg)
+        self.logger.info(self.log_prefix + msg)
 
     def error(self, msg):
-        self.logger.error(self.logPrefix + msg)
+        self.logger.error(self.log_prefix + msg)
 
     def warning(self, msg):
-        self.logger.warning(self.logPrefix + msg)
+        self.logger.warning(self.log_prefix + msg)
 
     def log(self, msg: str, level: int = 0):
-        self.logger.log(level, self.logPrefix + msg)
+        self.logger.log(level, self.log_prefix + msg)
 
     # Defining logging level 'CRITICAL', 'FATAL',  'ERROR', 'WARN', 'WARNING', 'INFO' or 'DEBUG'
     def setLoggerLevel(self, level: str):

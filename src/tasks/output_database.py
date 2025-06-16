@@ -1,4 +1,5 @@
 from datetime import date
+from types import NoneType
 from airflow.models import Connection
 from airflow.hooks.base import BaseHook
 from utils.database_facade import DatabaseFacade
@@ -72,7 +73,7 @@ class OutputDatabase:
         outdb.execute(sql=sql)
         outdb.commit()
 
-    def get_max_date_optical_deter(self) -> date:
+    def get_max_date_optical_deter(self) -> date | NoneType:
         """Gets the max date of optical DETER."""
 
         outdb = self.get_database_facade()

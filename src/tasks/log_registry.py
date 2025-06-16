@@ -20,7 +20,7 @@ class LogRegistry:
         self.db_facade.execute(sql=sql, logger=self.logger)
         self.db_facade.commit()
 
-    def read(self, filter_by_date: str = None, filter_by_status: str = "true"):
+    def read(self, filter_by_date: str = None, filter_by_status: str = "true"): # type: ignore
         """To read a most recent record from the control log table"""
 
         filter_by_date = (
