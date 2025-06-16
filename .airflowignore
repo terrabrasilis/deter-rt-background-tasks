@@ -1,1 +1,7 @@
+.git/
+.vscode/
+docs/
+src/tasks/
+src/utils/
+src/data/
 venv/
