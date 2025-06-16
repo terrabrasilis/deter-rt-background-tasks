@@ -1,5 +1,4 @@
 from datetime import date
-from types import NoneType
 from utils.database_facade import DatabaseFacade
 from utils.deter_parameters import DETERParameters
 from airflow.models import Connection
@@ -57,7 +56,7 @@ class SQLViewDataSource:
         DROP VIEW public.deter_data_source;
         """
 
-    def sql_copy_from_data_source(self, reference_date: date | NoneType) -> str:
+    def sql_copy_from_data_source(self, reference_date: date | None.__class__) -> str:
         """Build query string to COPY data from DETER data source to output database"""
 
         filter_by_date = ""
@@ -72,7 +71,7 @@ class SQLViewDataSource:
         {filter_by_date};
         """
 
-    def sql_count_data_source(self, reference_date: date | NoneType) -> str:
+    def sql_count_data_source(self, reference_date: date | None.__class__) -> str:
         """Build query string to COUNT data from DETER data source filtered by a reference date."""
 
         filter_by_date = ""

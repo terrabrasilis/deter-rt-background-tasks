@@ -1,4 +1,3 @@
-from types import NoneType
 from tasks.collector import Collector
 from tasks.output_database import OutputDatabase
 from tasks.sqlview_data_source import SQLViewDataSource
@@ -57,7 +56,7 @@ class SQLViewCollector(Collector):
         finally:
             outdb.close()
 
-    def __get_last_deter_date(self, outdb: DatabaseFacade) -> date | NoneType:
+    def __get_last_deter_date(self, outdb: DatabaseFacade) -> date | None.__class__:
         """To get the latest date of DETER data loaded from the data source."""
 
         sql = f"""SELECT MAX(date) FROM public.deter;"""
