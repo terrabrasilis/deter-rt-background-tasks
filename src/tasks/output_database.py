@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import datetime, date
 from airflow.models import Connection
 from airflow.hooks.base import BaseHook
 from utils.database_facade import DatabaseFacade
@@ -11,10 +11,10 @@ class OutputDatabase:
     # the Airflow connection ids
     # used to access the output database
     DETER_RT_CONNECTION_ID: str = "DETER_RT_DB_URL"
+    database: DatabaseFacade = None # type: ignore
 
     def __init__(self):
         self.deter_rt_db_url: Connection = BaseHook.get_connection(self.DETER_RT_CONNECTION_ID)
-        self.database: DatabaseFacade
         self.class_group = DETERParameters().class_group
 
     def get_sqlalchemy_engine(self):
@@ -72,7 +72,7 @@ class OutputDatabase:
         outdb.execute(sql=sql)
         outdb.commit()
 
-    def get_max_date_optical_deter(self) -> date | None.__class__:
+    def get_max_date_optical_deter(self) -> date:
         """Gets the max date of optical DETER."""
 
         outdb = self.get_database_facade()
@@ -86,24 +86,15 @@ class OutputDatabase:
         return max_date
 
 
-    # def get_file_metadata(self, data_source_name: str, file_name: str):
-    #     """
-    #     To get the metadata of the most recently downloaded file for a data source
+    def get_max_date_input_file(self) -> date:
+        """Gets the max date of last downloaded shapefile."""
 
-    #     Return
-    #     -----
-    #     last_modified, etag, file_size
-    #     """
+        outdb = self.get_database_facade()
+        sql = f"SELECT TO_CHAR(MAX(last_modified), 'YYYY-MM-DD') FROM public.input_data ip, public.deter_rt rt WHERE ip.file_date=rt.view_date AND ip.tile_id=rt.tile_id;"
+        data = outdb.fetchone(query=sql)
+        max_date = None
+        outdb.close()
+        if data is not None and len(data) > 0 and data[0] is not None:
+            max_date = datetime.strptime(data[0], '%Y-%m-%d').date()
 
-    #     outdb = OutputDatabase().get_database_facade(keep_connection=False)
-    #     sql = f"""SELECT last_modified, etag, file_size
-    #     FROM public.input_data WHERE file_name='{file_name}'
-    #     ORDER BY download_date DESC LIMIT 1;"""
-    #     data = outdb.fetchone(query=sql)
-    #     outdb.close()
-    #     metadata = None
-
-    #     if data is not None and len(data) > 0:
-    #         metadata = data
-
-    #     return metadata
+        return max_date

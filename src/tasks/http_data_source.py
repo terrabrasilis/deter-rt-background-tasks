@@ -51,27 +51,39 @@ class HTTPDataSource:
 
         return client
 
-    def make_shapefile_list(self, trigger_file: str) -> list[str]:
+    def make_shapefile_list(self, reference_date: date) -> list[dict]:
         shp_files = []
 
-        remote_path_base = f"{self.get_remote_directory()}/{trigger_file}"
-        local_path_base = f"{self.get_local_directory()}/{trigger_file}"
+        remote_path_base = f"{self.get_remote_directory()}"
+        shapefile_extensions = tuple(self.get_shapefile_sufixes())
+        self.logger.debug(f"{remote_path_base} path on remote server.")
+        self.logger.debug(f"{','.join(shapefile_extensions)} shapefiles extensions.")
 
         client = self.__connect()
 
-        client.download_file(remote_path=remote_path_base, local_path=local_path_base)
+        if client.check(remote_path=remote_path_base):
+            remote_folder_info = client.list(remote_path_base, get_info=True)
+            self.logger.debug(f"{len(remote_folder_info)} files found on remote server.")
 
-        lines: list[str]
-        with open(local_path_base, "r") as f:
-            lines = f.readlines()
+            for item in remote_folder_info:
+                if not item['isdir'] and str(os.path.basename(item['path'])).endswith(shapefile_extensions):
 
-        for line in lines:
-            if line.endswith(".shp"):
-                shp_files.append(line)
+                    file_date = datetime.strptime(item['modified'], '%a, %d %b %Y %H:%M:%S %Z').date()
+                    if reference_date is None or file_date > reference_date:
+                        item_tmp = {
+                            'size':item['size'],
+                            'modified':file_date.strftime('%Y-%m-%d'),
+                            'path':item['path'],
+                            'etag':item['etag'],
+                            'file_name':os.path.basename(item['path'])
+                        }
+                        shp_files.append(item_tmp)
+
+        self.logger.info(f"{len(shp_files)} files found on remote server.")
 
         return shp_files
 
-    def download_file(self, output_db: DatabaseFacade, file_name: str, file_date: date, tile_id: str):
+    def download_file(self, output_db: DatabaseFacade, file: dict):
         """
         To download a file from http source.
         
@@ -82,6 +94,7 @@ class HTTPDataSource:
         :param:file_date: The expected date of the file.
         :param:tile_id: The tile identifier extracted from original file name.
         """
+        file_name = file['file_name']
         remote_path_base = f"{self.get_remote_directory()}/{file_name}"
         local_path_base = f"{self.get_local_directory()}/{file_name}"
 
@@ -101,55 +114,34 @@ class HTTPDataSource:
             raise exc
 
         self.logger.info(f"file_name={file_name}")
-        self.logger.info(f"file_date={file_date}")
-        self.logger.info(f"tile_id={tile_id}")
 
         try:
-            self.__registry_on_control_table(output_db=output_db, file_name=file_name, file_date=file_date, tile_id=tile_id)
+            self.__registry_on_control_table(output_db=output_db, file=file)
         except Exception as exc:
             self.logger.error("Failed to register remote file metadata in control table.")
             raise exc
 
-    def __registry_on_control_table(self, output_db: DatabaseFacade, file_name:str, file_date: date, tile_id: str):
+    def __registry_on_control_table(self, output_db: DatabaseFacade, file:dict):
         """Write the metadata file into control table"""
 
-        last_modified, etag, content_length = self.__get_file_metadata(file_name=file_name)
+        content_length = int(file['size'])
+        etag = file['etag']
+        last_modified = file['modified']
+        file_name = file['file_name']
+        file_date = (file_name.split("."))[0].split("_")[3]
+        tile_id = (file_name.split("."))[0].split("_")[4]
+
+        self.logger.debug(f"file_name={file_name}")
+        self.logger.debug(f"file_date={file_date}")
+        self.logger.debug(f"tile_id={tile_id}")
+        self.logger.debug(f"content_length={content_length}")
+        self.logger.debug(f"etag={etag}")
+        self.logger.debug(f"last_modified={last_modified}")
 
         sql = f"""INSERT INTO public.input_data(file_name, file_date, tile_id, etag, file_size, last_modified)
         VALUES ('{file_name}', '{file_date}'::date, '{tile_id}', '{etag}', {content_length}, '{last_modified}'::date);"""
 
         output_db.execute(sql=sql, logger=self.logger)
-
-
-    def __get_file_metadata(self, file_name: str):
-        """Get metadata from remote file."""
-
-        remote_path_base = f"{self.get_remote_directory()}/{file_name}"
-        client = self.__connect()
-
-        f_info = client.info(remote_path=f"{remote_path_base}")
-        last_modified = datetime.strptime(f_info['modified'], '%a, %d %b %Y %H:%M:%S %Z')
-        etag = str(f_info['etag']).replace('"','')
-        content_length = f_info['size']
-        
-        return last_modified, etag, content_length
-
-
-    def get_trigger_file_list(self) -> list[str]:
-        
-        ctrl_files=[]
-        remote_path_base = self.get_remote_directory()
-
-        client = self.__connect()
-        trigger_file_prefix = self.get_trigger_file_prefix()
-
-        if client.check(remote_path=remote_path_base):
-            remote_folder_info = client.list(remote_path_base, get_info=True)
-            for item in remote_folder_info:
-                if not item['isdir'] and str(os.path.basename(item['path'])).startswith(trigger_file_prefix):
-                    ctrl_files.append(os.path.basename(item['path']))
-        
-        return ctrl_files
 
     def get_data_source_base_url(self) -> str:
         """Create a base URL using AirFlow connection settings."""
@@ -171,7 +163,7 @@ class HTTPDataSource:
         Return: tuple[user,password]
         """
 
-        return self.data_source_config.user, self.data_source_config.password
+        return self.data_source_config.login, self.data_source_config.password
 
     def get_local_directory(self) -> str:
         """
@@ -198,11 +190,12 @@ class HTTPDataSource:
 
         return self.data_source_config.extra_dejson.get("remote_directory")
 
-    def get_trigger_file_prefix(self) -> str:
+    def get_shapefile_sufixes(self) -> list[str]:
         """
-        Read trigger file prefix from AirFlow connection settings.
+        Read a shapefile extension list from AirFlow connection settings.
 
-        Return: str
+        Return: list[str]
         """
+        extension_list = str(self.data_source_config.extra_dejson.get("shapefile_extensions")).split(",")
 
-        return self.data_source_config.extra_dejson.get("trigger_file_prefix")
+        return extension_list

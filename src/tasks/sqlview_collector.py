@@ -56,7 +56,7 @@ class SQLViewCollector(Collector):
         finally:
             outdb.close()
 
-    def __get_last_deter_date(self, outdb: DatabaseFacade) -> date | None.__class__:
+    def __get_last_deter_date(self, outdb: DatabaseFacade) -> date:
         """To get the latest date of DETER data loaded from the data source."""
 
         sql = f"""SELECT MAX(date) FROM public.deter;"""

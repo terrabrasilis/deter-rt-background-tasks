@@ -1,5 +1,7 @@
+from datetime import date
 from tasks.http_data_source import HTTPDataSource
 from utils.logger import TasksLogger
+from tasks.output_database import OutputDatabase
 
 
 class HTTPDataChecker:
@@ -15,9 +17,12 @@ class HTTPDataChecker:
 
         ctrl_files = []
         try:
-            ctrl_files=self.data_source.get_trigger_file_list()
-        except:
+            outputdb = OutputDatabase()
+            reference_date = outputdb.get_max_date_input_file()
+            ctrl_files=self.data_source.make_shapefile_list(reference_date=reference_date)
+        except Exception as e:
             self.logger.error("Failed to read remote data.")
+            self.logger.error(f"{e}")
 
         return len(ctrl_files) > 0
 

@@ -28,7 +28,7 @@ class SQLViewDataChecker():
 
         return self.__has_deter_in_data_source(output_db=output_db, reference_date=reference_date)
 
-    def __has_deter_in_data_source(self, output_db: OutputDatabase, reference_date: date|None) -> bool:
+    def __has_deter_in_data_source(self, output_db: OutputDatabase, reference_date: date) -> bool:
         """Do we have new DETER-RT files in the data source?"""
 
         db_facade: DatabaseFacade

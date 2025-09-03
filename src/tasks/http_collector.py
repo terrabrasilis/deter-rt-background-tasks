@@ -25,17 +25,17 @@ class HTTPCollector(Collector):
 
         try:
 
-            trigger_files = self.data_source.get_trigger_file_list()
+            outputdb = OutputDatabase()
+            reference_date = outputdb.get_max_date_input_file()
 
-            for trigger_file in trigger_files:
-                file_list = self.data_source.make_shapefile_list(trigger_file=trigger_file)
+            file_list = self.data_source.make_shapefile_list(reference_date=reference_date)
 
-                if file_list is not None:
-                    for file in file_list:
-                        file_name, file_date, tile_id = self.__extract_metadata(file)
-                        if not self.data_source.download_file(output_db=self.outdb, file_name=file_name, file_date=file_date, tile_id=tile_id):
-                            self.logger.debug(f"{file_name} file download failed.")
-                            raise FileExistsError
+            if file_list is not None:
+                for file in file_list:
+                    
+                    if not self.data_source.download_file(output_db=self.outdb, file=file):
+                        self.logger.debug(f"{file['file_name']} file download failed.")
+                        raise FileExistsError
 
             self.outdb.commit()
         except Exception as exc:

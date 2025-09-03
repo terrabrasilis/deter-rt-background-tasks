@@ -67,9 +67,9 @@ class BaseDagOperators:
             from tasks.sqlview_data_checker import SQLViewDataChecker
 
             deterRTDataChecker = HTTPDataChecker(log_level=log_level)
-            opticalDeterDataChecker = SQLViewDataChecker(log_level=log_level)
+            #opticalDeterDataChecker = SQLViewDataChecker(log_level=log_level)
 
-            if deterRTDataChecker.has_new_data() and opticalDeterDataChecker.has_new_data():
+            if deterRTDataChecker.has_new_data(): # and opticalDeterDataChecker.has_new_data():
                 return "collector_task"
             else:
                 return "log_registry_task"
