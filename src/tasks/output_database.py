@@ -62,6 +62,12 @@ class OutputDatabase:
 
         assert data and data == 1
 
+    def create_dblink_extension(self):
+        outdb = self.get_database_facade()
+        sql = f"""CREATE EXTENSION IF NOT EXISTS dblink;"""
+        outdb.execute(sql=sql)
+        outdb.commit()
+
     def create_data_source_sql_view(self, sql):
         outdb = self.get_database_facade()
         outdb.execute(sql=sql)

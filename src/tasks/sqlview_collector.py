@@ -32,7 +32,8 @@ class SQLViewCollector(Collector):
             last_deter_date = self.__get_last_deter_date(outdb=outdb)
             self.logger.info(f"last_deter_date={last_deter_date}")
 
-
+            # create dblink extension if not exists
+            db.create_dblink_extension()
             # create a SQLView in the output database from the source database
             db.create_data_source_sql_view(sql=self.data_source.sql_view_to_create())
 
@@ -59,7 +60,7 @@ class SQLViewCollector(Collector):
     def __get_last_deter_date(self, outdb: DatabaseFacade) -> date:
         """To get the latest date of DETER data loaded from the data source."""
 
-        sql = f"""SELECT MAX(date) FROM public.deter;"""
+        sql = f"""SELECT MAX(view_date) FROM public.deter_otico;"""
         data = outdb.fetchone(query=sql)
         
         # the default date based on the project definition

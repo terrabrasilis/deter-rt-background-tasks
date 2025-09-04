@@ -31,13 +31,13 @@ class BaseDagOperators:
 
         def fnc_operator():
 
-            deter_amazonia_db_url = BaseHook.get_connection("DETER_AMAZONIA_DB_URL")
+            deter_amazonia_db_url = BaseHook.get_connection("DETER_RT_DETER_AMAZONIA_DB_URL")
             deter_rt_db_url = BaseHook.get_connection("DETER_RT_DB_URL")
             deter_rt_http_url = BaseHook.get_connection("DETER_RT_WEBDAV_NEXTCLOUD")
 
             if not deter_amazonia_db_url or not deter_amazonia_db_url.get_uri():
                 raise Exception(
-                    f"Missing DETER_AMAZONIA_DB_URL airflow conection configuration."
+                    f"Missing DETER_RT_DETER_AMAZONIA_DB_URL airflow conection configuration."
                 )
 
             if not deter_rt_db_url or not deter_rt_db_url.get_uri():

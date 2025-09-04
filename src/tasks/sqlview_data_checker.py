@@ -41,6 +41,8 @@ class SQLViewDataChecker():
             raise Exception("Failed to connect to output database")
 
         try:
+            # create dblink extension if not exists
+            output_db.create_dblink_extension()
             # create a SQLView in the output database from the source database
             output_db.create_data_source_sql_view(sql=self.data_source.sql_view_to_create())
 

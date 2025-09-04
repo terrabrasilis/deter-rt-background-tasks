@@ -30,18 +30,12 @@ class HTTPCollector(Collector):
 
             file_list = self.data_source.make_shapefile_list(reference_date=reference_date)
 
-            if file_list is not None:
-                for file in file_list:
-                    
-                    if not self.data_source.download_file(output_db=self.outdb, file=file):
-                        self.logger.debug(f"{file['file_name']} file download failed.")
-                        raise FileExistsError
+            for file in file_list:
+                self.data_source.download_file(output_db=self.outdb, file=file)
 
             self.outdb.commit()
         except Exception as exc:
-            self.logger.error(
-                f"Reverting records of downloaded data."
-            )
+            self.logger.error(f"Reverting records of downloaded data.")
             self.outdb.rollback()
             raise exc
         finally:

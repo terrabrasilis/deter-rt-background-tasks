@@ -10,7 +10,7 @@ class SQLViewDataSource:
     database: DatabaseFacade
     # the Airflow connection ids
     # used to build the SQLView to copy deter amz data
-    DETER_AMAZONIA_CONNECTION_ID: str = "DETER_AMAZONIA_DB_URL"
+    DETER_AMAZONIA_CONNECTION_ID: str = "DETER_RT_DETER_AMAZONIA_DB_URL"
     deter_amz_db_url: Connection = None
 
     def __init__(self):
@@ -65,7 +65,7 @@ class SQLViewDataSource:
             filter_by_date = f"AND date >= '{str_dt}'::date"
 
         return f"""
-        INSERT INTO public.deter(geom, view_date, class_name)
+        INSERT INTO public.deter_otico(geom, view_date, class_name)
         SELECT geom, date, classname FROM public.deter_data_source
         WHERE classname IN ({self.class_group['deter']['DS']})
         {filter_by_date};

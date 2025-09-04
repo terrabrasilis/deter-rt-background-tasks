@@ -4,7 +4,7 @@ from airflow.models import Connection
 from airflow.hooks.base import BaseHook
 from utils.logger import TasksLogger
 from webdav3.client import Client
-from webdav3.client import ConnectionException
+from webdav3.exceptions import ConnectionException, WebDavException, ResponseErrorCode, NotEnoughSpace
 from datetime import date
 from utils.database_facade import DatabaseFacade
 from datetime import datetime
@@ -103,17 +103,26 @@ class HTTPDataSource:
         # if file already exists, avoid download again
         if os.path.isfile(path=local_path_base):
             self.logger.debug(f"Local file is up to date. Skipping download step.")
-            return True
         else:
             self.logger.debug(f"The local file needs to be updated.")
 
-        try:
-            client.download_file(remote_path=remote_path_base, local_path=local_path_base)
-        except Exception as exc:
-            self.logger.error("Failure while trying to download file from data source.")
-            raise exc
+            try:
+                client.download_sync(remote_path=remote_path_base, local_path=local_path_base)
+            except WebDavException as wexc:
+                self.logger.error("Failure while trying to download file from data source.")
+                self.logger.error(str(wexc))
+                if isinstance(wexc, ResponseErrorCode) and wexc.code == 404:
+                    # do not try again if the file was not found
+                    self.logger.error(f"File not found: {remote_path_base}")
+                    raise FileNotFoundError
+                else:
+                    self.logger.info("Retrying the download...")
+                    self.download_file(output_db=output_db, file=file)
+            except Exception as exc:
+                self.logger.error("Failure while trying to download file from data source.")
+                raise exc
 
-        self.logger.info(f"file_name={file_name}")
+            self.logger.info(f"file_name={file_name}")
 
         try:
             self.__registry_on_control_table(output_db=output_db, file=file)
@@ -125,7 +134,7 @@ class HTTPDataSource:
         """Write the metadata file into control table"""
 
         content_length = int(file['size'])
-        etag = file['etag']
+        etag = str(file['etag']).replace('"', '')
         last_modified = file['modified']
         file_name = file['file_name']
         file_date = (file_name.split("."))[0].split("_")[3]
@@ -139,7 +148,8 @@ class HTTPDataSource:
         self.logger.debug(f"last_modified={last_modified}")
 
         sql = f"""INSERT INTO public.input_data(file_name, file_date, tile_id, etag, file_size, last_modified)
-        VALUES ('{file_name}', '{file_date}'::date, '{tile_id}', '{etag}', {content_length}, '{last_modified}'::date);"""
+        VALUES ('{file_name}', '{file_date}'::date, '{tile_id}', '{etag}', {content_length}, '{last_modified}'::date)
+        ON CONFLICT DO NOTHING;"""
 
         output_db.execute(sql=sql, logger=self.logger)
 
