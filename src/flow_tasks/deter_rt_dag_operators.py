@@ -64,12 +64,10 @@ class BaseDagOperators:
             """should return one task_id: collector_task or log_registry_task"""
             sys.path.append(project_dir)
             from tasks.http_data_checker import HTTPDataChecker
-            from tasks.sqlview_data_checker import SQLViewDataChecker
 
             deterRTDataChecker = HTTPDataChecker(log_level=log_level)
-            #opticalDeterDataChecker = SQLViewDataChecker(log_level=log_level)
 
-            if deterRTDataChecker.has_new_data(): # and opticalDeterDataChecker.has_new_data():
+            if deterRTDataChecker.has_new_data():
                 return "collector_task"
             else:
                 return "log_registry_task"
@@ -117,7 +115,10 @@ class BaseDagOperators:
 
         def fnc_operator(project_dir: str, log_level: str):
             sys.path.append(project_dir)
-            pass
+            from tasks.deter_rt_loader import DeterRTLoader
+
+            loader = DeterRTLoader(log_level=log_level)
+            loader.data_loader()
 
         return PythonVirtualenvOperator(
             task_id="loader_task",
@@ -134,7 +135,10 @@ class BaseDagOperators:
 
         def fnc_operator(project_dir: str, log_level: str):
             sys.path.append(project_dir)
-            pass
+            from tasks.deter_rt_transformer import DeterRTTransformer
+
+            transformer = DeterRTTransformer(log_level=log_level)
+            transformer.process_data()
 
         return PythonVirtualenvOperator(
             task_id="transformer_task",
