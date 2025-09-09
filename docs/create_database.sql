@@ -126,8 +126,15 @@ CREATE TABLE IF NOT EXISTS public.input_data
     id serial,
     file_name character varying(256) NOT NULL,
     download_date date NOT NULL DEFAULT (now())::date,
-    count_itens integer NOT NULL,
-    CONSTRAINT input_data_pkey PRIMARY KEY (id)
+    file_date date,
+    etag character varying,
+    file_size integer,
+    last_modified date,
+    tile_id character varying,
+    import_date date,
+    CONSTRAINT input_data_pkey PRIMARY KEY (id),
+    CONSTRAINT input_data_etag_unique UNIQUE (etag)
+        INCLUDE(last_modified)
 );
 
 -- Temporary tables
