@@ -1,11 +1,12 @@
 import glob
 import os
 import pathlib
+import shutil
 import geopandas as gpd
 from tasks.http_data_source import HTTPDataSource
 from tasks.output_database import OutputDatabase
 from utils.logger import TasksLogger
-
+from datetime import datetime
 
 class DeterRTLoader():
     """DeterRTLoader: The DETER RT loader."""
@@ -18,27 +19,33 @@ class DeterRTLoader():
     def data_loader(self):
         """Used to read files from local directory and import that into output database."""
 
-        data_dir = self.data_source.get_local_directory()
+        try:
+            tmp_dir = self.data_source.get_tmp_directory()
 
-        temporary_tables = self.__shapefile_to_postgis(data_dir)
+            temporary_tables = self.__shapefile_to_postgis(tmp_dir)
 
-        self.__set_imported_file_list(files=temporary_tables)
+            self.__set_imported_file_list(files=temporary_tables)
 
-        # remove all imported files
-        # self.__remove_files(
-        #     data_dir=data_dir,
-        #     extension_list=[
-        #         "shz",
-        #         "sbn",
-        #         "sbx",
-        #         "dbf",
-        #         "prj",
-        #         "shx",
-        #         "shp",
-        #         "cpg",
-        #         "xml",
-        #     ],
-        # )
+            # store all imported files to bkp directory
+            self.__backup_files(
+                tmp_dir=tmp_dir,
+                extension_list=[
+                    "shz",
+                    "sbn",
+                    "sbx",
+                    "dbf",
+                    "prj",
+                    "shx",
+                    "shp",
+                    "cpg",
+                    "xml",
+                ],
+            )
+        except Exception as ex:
+            ex_msg = "Failed to load data to output database"
+            self.logger.error(ex_msg)
+            self.logger.error(f"{ex}")
+            raise Exception(ex_msg)
 
     def __shapefile_to_postgis(self, data_dir: str) -> list[str]:
         """Import shapefiles to temporary table on Postgres/Postgis database."""
@@ -120,19 +127,25 @@ class DeterRTLoader():
         for file_name in files:
             outdb.update_imported_file(file_name=file_name)
 
-    def __remove_files(self, data_dir: str, extension_list: list):
+    def __backup_files(self, tmp_dir: str, extension_list: list):
         """
-        Removes all files from a data directory, as per the extension list.
+        Store all files from a temporary directory to backup directory, as per the extension list.
 
         Parameters:
         ----
-        :param:data_dir a location to find files.
+        :param:tmp_dir a location to find files.
         :param:extension_list a list of file extensions like this: ['shz','sbn','sbx','dbf','prj','shx','shp','cpg','xml']
         """
 
         any_files = []
         for ext in extension_list:
-            any_files.extend(glob.glob(f"{data_dir}/*.{ext}"))
+            any_files.extend(glob.glob(f"{tmp_dir}/*.{ext}"))
+
+        backup_directory = self.data_source.get_backup_directory()
+        today = datetime.now().strftime("%Y_%m_%d")
+        archive_name = f"deter_rt_{today}"
+
+        shutil.make_archive(base_name=f"{backup_directory}/{archive_name}", format="zip", root_dir=tmp_dir)
 
         for f in any_files:
             pathlib.Path(f).unlink(missing_ok=True)

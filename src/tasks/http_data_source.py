@@ -4,7 +4,7 @@ from airflow.models import Connection
 from airflow.hooks.base import BaseHook
 from utils.logger import TasksLogger
 from webdav3.client import Client
-from webdav3.exceptions import ConnectionException, WebDavException, ResponseErrorCode, NotEnoughSpace
+from webdav3.exceptions import ConnectionException, WebDavException, ResponseErrorCode
 from datetime import date
 from utils.database_facade import DatabaseFacade
 from datetime import datetime
@@ -96,7 +96,7 @@ class HTTPDataSource:
         """
         file_name = file['file_name']
         remote_path_base = f"{self.get_remote_directory()}/{file_name}"
-        local_path_base = f"{self.get_local_directory()}/{file_name}"
+        local_path_base = f"{self.get_tmp_directory()}/{file_name}"
 
         client = self.__connect()
 
@@ -175,9 +175,43 @@ class HTTPDataSource:
 
         return self.data_source_config.login, self.data_source_config.password
 
-    def get_local_directory(self) -> str:
+    def get_backup_directory(self) -> str:
         """
-        Returns the directory to store data on download process.
+        Returns the backup directory to store data.
+        If the directory does not exist, it will be created.
+        """
+
+        default_dir = str(pathlib.Path(__file__).parent.parent.resolve().absolute())
+        base_dir = self.project_dir if self.project_dir else default_dir
+        base_dir = f"{base_dir}/data/bkp"
+
+        if not os.path.isdir(base_dir):
+            self.logger.info(f"Creating a backup directory in {base_dir}")
+            os.makedirs(base_dir)
+
+        return base_dir
+
+
+    def get_data_directory(self) -> str:
+        """
+        Returns the project data directory.
+        We expect a data directory inside the project directory.
+        If the directory does not exist, it will be created.
+        """
+
+        default_dir = str(pathlib.Path(__file__).parent.parent.resolve().absolute())
+        base_dir = self.project_dir if self.project_dir else default_dir
+        base_dir = f"{base_dir}/data"
+
+        if not os.path.isdir(base_dir):
+            self.logger.info(f"Creating a data directory in {base_dir}")
+            os.makedirs(base_dir)
+
+        return base_dir
+
+    def get_tmp_directory(self) -> str:
+        """
+        Returns the temporary directory to store data on download process.
         If the directory does not exist, it will be created.
         """
 
@@ -186,7 +220,7 @@ class HTTPDataSource:
         base_dir = f"{base_dir}/data/tmp"
 
         if not os.path.isdir(base_dir):
-            self.logger.info(f"Creating a directory in {base_dir}")
+            self.logger.info(f"Creating a temporary directory in {base_dir}")
             os.makedirs(base_dir)
 
         return base_dir
