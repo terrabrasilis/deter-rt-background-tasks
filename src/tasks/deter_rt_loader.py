@@ -8,10 +8,11 @@ from tasks.output_database import OutputDatabase
 from utils.logger import TasksLogger
 from datetime import datetime
 
-class DeterRTLoader():
+
+class DeterRTLoader:
     """DeterRTLoader: The DETER RT loader."""
 
-    def __init__(self, log_level: str="DEBUG"):
+    def __init__(self, log_level: str = "DEBUG"):
         self.logger = TasksLogger(self.__class__.__name__)
         self.logger.setLoggerLevel(level=log_level)
         self.data_source = HTTPDataSource(log_level=log_level)
@@ -27,20 +28,8 @@ class DeterRTLoader():
             self.__set_imported_file_list(files=temporary_tables)
 
             # store all imported files to bkp directory
-            self.__backup_files(
-                tmp_dir=tmp_dir,
-                extension_list=[
-                    "shz",
-                    "sbn",
-                    "sbx",
-                    "dbf",
-                    "prj",
-                    "shx",
-                    "shp",
-                    "cpg",
-                    "xml",
-                ],
-            )
+            self.__backup_files(tmp_dir=tmp_dir)
+
         except Exception as ex:
             ex_msg = "Failed to load data to output database"
             self.logger.error(ex_msg)
@@ -50,8 +39,6 @@ class DeterRTLoader():
     def __shapefile_to_postgis(self, data_dir: str) -> list[str]:
         """Import shapefiles to temporary table on Postgres/Postgis database."""
 
-        # TODO: name of the columns we need in the temporary table
-        columns_raw = ["area_ha","RCRmin","Date", "Confidence", "Date_dt"]
         tables = []
         ext = "shp"
         try:
@@ -65,7 +52,7 @@ class DeterRTLoader():
                 # Read shapefile using GeoPandas
                 try:
                     self.logger.debug(f"Reading shapefile {filein}")
-                    gdf = gpd.read_file(filein)  #, columns=columns_raw)
+                    gdf = gpd.read_file(filein)
                 except Exception as ex:
                     self.logger.error(f"Failed to read shapefile {filein}")
                     self.logger.error(f"{ex}")
@@ -91,13 +78,17 @@ class DeterRTLoader():
 
                 # remove shapefile
                 # os.system(str("rm -f {:s}.*".format(filein)))
-            
+
             if num_files == 0:
                 self.logger.warning(f"No {ext} files found on {data_dir}")
             elif num_files == len(tables):
-                self.logger.info(f"All {num_files} {ext} files were imported to database")
+                self.logger.info(
+                    f"All {num_files} {ext} files were imported to database"
+                )
             else:
-                self.logger.warning(f"Only {len(tables)} of {num_files} {ext} files were imported to database")
+                self.logger.warning(
+                    f"Only {len(tables)} of {num_files} {ext} files were imported to database"
+                )
 
         except Exception as ex:
             ex_msg = f"Failed to transform {ext} files"
@@ -111,10 +102,12 @@ class DeterRTLoader():
         """Get all files from a data directory, as per the extension."""
 
         files = glob.glob(os.path.join(data_dir, f"*.{extension}"))
-        
+
         self.logger.info(f"Found {len(files)} *.{extension} files on {data_dir}")
 
-        files = OutputDatabase().get_input_files_to_import(files=files, extension=extension)
+        files = OutputDatabase().get_input_files_to_import(
+            files=files, extension=extension
+        )
 
         self.logger.info(f"Found {len(files)} files on database not imported yet")
 
@@ -127,7 +120,7 @@ class DeterRTLoader():
         for file_name in files:
             outdb.update_imported_file(file_name=file_name)
 
-    def __backup_files(self, tmp_dir: str, extension_list: list):
+    def __backup_files(self, tmp_dir: str, extension_list: list = []):
         """
         Store all files from a temporary directory to backup directory, as per the extension list.
 
@@ -137,6 +130,18 @@ class DeterRTLoader():
         :param:extension_list a list of file extensions like this: ['shz','sbn','sbx','dbf','prj','shx','shp','cpg','xml']
         """
 
+        extension_list = [
+            "shz",
+            "sbn",
+            "sbx",
+            "dbf",
+            "prj",
+            "shx",
+            "shp",
+            "cpg",
+            "xml",
+        ] if not extension_list else extension_list
+
         any_files = []
         for ext in extension_list:
             any_files.extend(glob.glob(f"{tmp_dir}/*.{ext}"))
@@ -145,7 +150,11 @@ class DeterRTLoader():
         today = datetime.now().strftime("%Y_%m_%d")
         archive_name = f"deter_rt_{today}"
 
-        shutil.make_archive(base_name=f"{backup_directory}/{archive_name}", format="zip", root_dir=tmp_dir)
+        shutil.make_archive(
+            base_name=f"{backup_directory}/{archive_name}",
+            format="zip",
+            root_dir=tmp_dir,
+        )
 
         for f in any_files:
             pathlib.Path(f).unlink(missing_ok=True)

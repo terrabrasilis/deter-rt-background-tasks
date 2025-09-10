@@ -60,8 +60,8 @@ with DAG(
     transformer = baseDag.transformer_task_operator()
     validator = baseDag.validator_task_operator()
     log = baseDag.log_registry_task_operator()
-    email_operator = baseDag.email_operator(
-        datetime.today().strftime("%Y-%m-%d"), email_to=EMAIL_TO
+    email_operator = baseDag.report_task_operator(
+        datetime.today().strftime("%d/%m/%Y"), email_to=EMAIL_TO
     )
 
     check_conf >> check_new_data >> [collector, log]

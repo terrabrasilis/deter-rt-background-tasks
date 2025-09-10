@@ -69,8 +69,7 @@ CREATE INDEX IF NOT EXISTS deter_otico_geom_idx
 
 CREATE TABLE IF NOT EXISTS public.deter_rt_validados
 (
-    fid serial,
-    id integer,
+    id serial,
     uuid character varying NOT NULL,
     geom geometry(MultiPolygon,4674) NOT NULL,
     area_km double precision NOT NULL,
@@ -78,30 +77,32 @@ CREATE TABLE IF NOT EXISTS public.deter_rt_validados
     class_name character varying(256),
     created_at date NOT NULL,
     tile_id character varying(256) NOT NULL,
-    nome_avaliador character varying,
-    classe_avaliador character varying,
-    data_avaliacao timestamp without time zone,
-    deltat integer,
     lat double precision,
     lon double precision,
     status integer,
-    -- nome_avaliador1 character varying,
-    -- classe_avaliador1 character varying,
-    -- datafim_avaliador1 timestamp without time zone,
-    -- deltat_avaliador1 integer,
-    -- nome_avaliador2 character varying,
-    -- classe_avaliador2 character varying,
-    -- datafim_avaliador2 timestamp without time zone,
-    -- deltat_avaliador2 integer,
-    -- nome_avaliador3 character varying,
-    -- classe_avaliador3 character varying,
-    -- datafim_avaliador3 timestamp without time zone,
-    -- deltat_avaliador3 integer,
-    -- nome_avaliador4 character varying,
-    -- classe_avaliador4 character varying,
-    -- datafim_avaliador4 timestamp without time zone,
-    -- deltat_avaliador4 integer,
-    CONSTRAINT deter_rt_validados_fid_pk PRIMARY KEY (fid)
+    auditar integer,
+    validado integer,
+    nome_avaliador1 character varying,
+    contexto_avaliador1 character varying,
+    classe_avaliador1 character varying,
+    datafim_avaliador1 timestamp without time zone,
+    deltat_avaliador1 integer,
+    nome_avaliador2 character varying,
+    contexto_avaliador2 character varying,
+    classe_avaliador2 character varying,
+    datafim_avaliador2 timestamp without time zone,
+    deltat_avaliador2 integer,
+    nome_avaliador3 character varying,
+    contexto_avaliador3 character varying,
+    classe_avaliador3 character varying,
+    datafim_avaliador3 timestamp without time zone,
+    deltat_avaliador3 integer,
+    nome_avaliador4 character varying,
+    contexto_avaliador4 character varying,
+    classe_avaliador4 character varying,
+    datafim_avaliador4 timestamp without time zone,
+    deltat_avaliador4 integer,
+    CONSTRAINT deter_rt_validados_id_pk PRIMARY KEY (uuid)
 );
 
 
@@ -149,3 +150,25 @@ COMMENT ON SCHEMA tmp
     IS 'Used to temporary tables from tasks';
 
 
+
+-- Functions-- -------------------------------------------
+-- DROP FUNCTION IF EXISTS public.safe_diff(geometry, geometry);
+
+CREATE OR REPLACE FUNCTION safe_diff(geom_a geometry, geom_b geometry)
+    RETURNS geometry AS
+    $$
+    BEGIN
+        RETURN ST_difference(geom_a,geom_b);
+        EXCEPTION
+            WHEN OTHERS THEN
+                BEGIN
+            RAISE NOTICE 'trying to solve exception';
+                    RETURN ST_difference(ST_Buffer(geom_a, 0.0000001), ST_Buffer(geom_b, 0.0000001));
+                    EXCEPTION
+                        WHEN OTHERS THEN
+                            RAISE NOTICE 'Not able to solve exception';
+                        RETURN ST_GeomFromText('POLYGON EMPTY');
+        END;
+END
+$$
+LANGUAGE 'plpgsql' STABLE STRICT;

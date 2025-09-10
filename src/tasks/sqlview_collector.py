@@ -9,6 +9,7 @@ class SQLViewCollector(Collector):
     """SQLView Collector: Represents a reader data from internal Database sources."""
 
     def __init__(self, log_level: str):
+        self.log_level = log_level
         super().__init__(log_level=log_level)
         self.data_source: SQLViewDataSource = SQLViewDataSource()
 
@@ -20,7 +21,7 @@ class SQLViewCollector(Collector):
         num_rows: int
 
         try:
-            db = OutputDatabase()
+            db = OutputDatabase(log_level=self.log_level)
             outdb = db.get_database_facade()
 
         except Exception as exc:
@@ -64,7 +65,7 @@ class SQLViewCollector(Collector):
         data = outdb.fetchone(query=sql)
         
         # the default date based on the project definition
-        deter_date = None
+        deter_date = date(2016, 8, 1)
 
         if data and data[0]:
             deter_date = data[0]

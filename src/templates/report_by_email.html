@@ -1,0 +1,16 @@
+<html>
+  <body style="font-family: Arial, sans-serif; color: #333;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px; background-color: #f9f9f9;">
+      <h2 style="color: #2e6c80;">🎉 ${task_name} completed</h2>
+      <p>Hello,</p>
+      <p>We're happy to inform you that the <strong>${task_name}</strong> has completed successfully on ${date}.</p>
+      <div style="padding: 15px; margin: 20px 0; background-color: #e8f5e9; border-left: 5px solid #66bb6a;">
+        {{ ti.xcom_pull(task_ids='report_task', key='return_value') }}
+      </div>
+      <p>If you have any questions or need support, feel free to reach out.</p>
+      <p style="margin-top: 40px;">Best regards,<br><strong>TerraBrasilis Team</strong></p>
+      <hr style="margin-top: 40px;">
+      <small style="color: #888;">This is an automated message.</small>
+    </div>
+  </body>
+</html>
