@@ -32,9 +32,8 @@ CREATE TABLE IF NOT EXISTS public.deter_rt
     area_km double precision NOT NULL,
     created_at date NOT NULL DEFAULT (now())::date,
     tile_id character varying(256) NOT NULL,
-    auditar integer NOT NULL DEFAULT 0,
-    audit_date date,
-    CONSTRAINT deter_rt_pkey PRIMARY KEY (id)
+    detection_date date,
+    CONSTRAINT deter_rt_pkey PRIMARY KEY (uuid)
 );
 
 -- DROP INDEX IF EXISTS public.deter_rt_geom_idx;
