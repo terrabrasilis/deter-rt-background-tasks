@@ -1,14 +1,14 @@
--- DROP DATABASE IF EXISTS deter_rt_amazonia;
+-- DROP DATABASE IF EXISTS deter_amazonia_rt;
 
-CREATE DATABASE deter_rt_amazonia
+CREATE DATABASE deter_amazonia_rt
     WITH
     OWNER = postgres
     ENCODING = 'UTF8'
     CONNECTION LIMIT = -1
     IS_TEMPLATE = False;
 
-COMMENT ON DATABASE deter_rt_amazonia
-    IS 'Used in the validation phase. Created in 2025/06/10';
+COMMENT ON DATABASE deter_amazonia_rt
+    IS 'Used in the validation phase. Created in 2025/09/11';
 
 
 -- -------------------------------------------

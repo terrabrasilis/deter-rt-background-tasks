@@ -35,7 +35,7 @@ if DETER_RT_EMAIL_TO:
     EMAIL_TO = list(set(EMAIL_TO + DETER_RT_EMAIL_TO))
 # Default arguments for all tasks. Precedence is the value at task instantiation.
 task_default_args = {
-    "start_date": pendulum.datetime(year=2025, month=1, day=15, tz="America/Sao_Paulo"),
+    "start_date": pendulum.datetime(year=2025, month=8, day=11, tz="America/Sao_Paulo"),
     "owner": "airflow",
     "depends_on_past": False,
     "email": EMAIL_TO,
@@ -52,9 +52,11 @@ description = f"This flow represents the process to get files from NextCloud COI
 with DAG(
     dag_id=DAG_KEY,
     description=description,
-    schedule=None,
+    start_date=pendulum.datetime(year=2025, month=8, day=11, tz="America/Sao_Paulo"),
+    schedule_interval='0 5 * * *',
     catchup=False,
     default_args=task_default_args,
+    tags=['DETER-RT', 'RADAR', 'DETER'],
 ) as process_dag:
 
     baseDag = BaseDagOperators(
