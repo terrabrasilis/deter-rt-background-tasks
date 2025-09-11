@@ -29,7 +29,9 @@ class BaseDagOperators:
 
         def fnc_operator():
 
-            deter_amazonia_db_url = BaseHook.get_connection("DETER_RT_DETER_AMAZONIA_DB_URL")
+            deter_amazonia_db_url = BaseHook.get_connection(
+                "DETER_RT_DETER_AMAZONIA_DB_URL"
+            )
             deter_rt_db_url = BaseHook.get_connection("DETER_RT_DB_URL")
             deter_rt_http_url = BaseHook.get_connection("DETER_RT_WEBDAV_NEXTCLOUD")
 
@@ -42,7 +44,7 @@ class BaseDagOperators:
                 raise Exception(
                     "Missing DETER_RT_DB_URL airflow conection configuration."
                 )
-            
+
             if not deter_rt_http_url or not deter_rt_http_url.get_uri():
                 raise Exception(
                     "Missing DETER_RT_WEBDAV_NEXTCLOUD airflow HTTP configuration."
@@ -155,6 +157,7 @@ class BaseDagOperators:
         def fnc_operator(project_dir: str, log_level: str):
             sys.path.append(project_dir)
             from tasks.deter_rt_validator import DeterRTValidator
+
             validator = DeterRTValidator(log_level=log_level)
             validator.validation()
 
@@ -170,9 +173,7 @@ class BaseDagOperators:
     def log_registry_task_operator(self):
         """Write log into collector_log table"""
 
-        def fnc_operator(
-            project_dir: str, log_level: str, branch_target: str
-        ):
+        def fnc_operator(project_dir: str, log_level: str, branch_target: str):
 
             sys.path.append(project_dir)
             from tasks.log_registry import LogRegistry
@@ -202,18 +203,18 @@ class BaseDagOperators:
             },
         )
 
-
     def report_task_operator(self, updated_date, email_to: list):
         sys.path.append(self.project_dir)
         from utils.template_loader import TemplateLoader
-        
-        html_content = TemplateLoader.read_html_template(project_dir=self.project_dir,
-            file_name='report_by_email.html',
-            task_name=f'DETER-RT background task processing',
-            date=updated_date
+
+        html_content = TemplateLoader.read_html_template(
+            project_dir=self.project_dir,
+            file_name="report_by_email.html",
+            task_name=f"DETER-RT background task processing",
+            date=updated_date,
         )
 
-        def fnc_operator(project_dir: str, updated_date:str, log_level: str):
+        def fnc_operator(project_dir: str, log_level: str):
             sys.path.append(project_dir)
             from tasks.output_database import OutputDatabase
 
@@ -227,7 +228,6 @@ class BaseDagOperators:
             </ul>
             """
             return report
-            
 
         report_task = PythonVirtualenvOperator(
             task_id="report_task",
@@ -235,21 +235,41 @@ class BaseDagOperators:
             venv_cache_path=f"{self.venv_path}",
             python_callable=fnc_operator,
             provide_context=True,
-            op_args=[f"{self.project_dir}", f"{updated_date}", f"{self.log_level}"],
+            op_args=[f"{self.project_dir}", f"{self.log_level}"],
             retries=0,
         )
 
         # conn_id: The Airflow connection ID to use for sending the email (e.g., an SMTP connection).
         report_task_email = EmailOperator(
-            task_id='report_task_email',
-            conn_id='SMTP_INPE',
+            task_id="report_task_email",
+            conn_id="SMTP_INPE",
             mime_charset="utf-8",
             to=email_to,
-            subject=f'✅ DETER-RT - Data released for audit in {updated_date}',
+            subject=f"✅ DETER-RT - Data released for audit in {updated_date}",
             html_content=html_content,
-            trigger_rule=TriggerRule.ALL_SUCCESS
+            trigger_rule=TriggerRule.ALL_SUCCESS,
         )
 
         report_task.set_downstream(report_task_email)
         return report_task
-        
+
+    def failure_task_operator(self, updated_date, email_to: list):
+        """Send email if the flow fails."""
+
+        sys.path.append(self.project_dir)
+        from utils.template_loader import TemplateLoader
+
+        html_content = TemplateLoader.read_html_template(
+            project_dir=self.project_dir,
+            file_name="failed_email.html",
+            task_name=f"DETER-RT background task processing",
+            date=updated_date,
+        )
+
+        return EmailOperator(
+            task_id="process_failed",
+            to=email_to,
+            subject=f"❌ DETER-RT - Task Processing Failed",
+            html_content=html_content,
+            trigger_rule=TriggerRule.ONE_FAILED,
+        )

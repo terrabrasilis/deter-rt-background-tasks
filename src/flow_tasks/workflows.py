@@ -31,13 +31,11 @@ if not EMAIL_TO or not LOG_LEVEL:
 EMAIL_TO = str(EMAIL_TO).split(",")
 # Default arguments for all tasks. Precedence is the value at task instantiation.
 task_default_args = {
-    "start_date": pendulum.datetime(
-        year=2025, month=1, day=15, tz="America/Sao_Paulo"
-    ),
+    "start_date": pendulum.datetime(year=2025, month=1, day=15, tz="America/Sao_Paulo"),
     "owner": "airflow",
     "depends_on_past": False,
     "email": EMAIL_TO,
-    "email_on_failure": True,
+    "email_on_failure": False,
     "email_on_retry": False,
     "retries": 0,
 }
@@ -45,13 +43,19 @@ task_default_args = {
 venv_path = f"/opt/airflow/venv/inpe/deter_rt"
 
 DAG_KEY = f"deter_rt_validation"
-description=f"This flow represents the process to get files from NextCloud COIDS, import into PostGIS database, perform automatic validation and prepare for manual validation."
+description = f"This flow represents the process to get files from NextCloud COIDS, import into PostGIS database, perform automatic validation and prepare for manual validation."
 
 with DAG(
-    dag_id=DAG_KEY, description=description, schedule=None, catchup=False, default_args=task_default_args
+    dag_id=DAG_KEY,
+    description=description,
+    schedule=None,
+    catchup=False,
+    default_args=task_default_args,
 ) as process_dag:
 
-    baseDag = BaseDagOperators(venv_path=venv_path, project_dir=project_dir, log_level=LOG_LEVEL)
+    baseDag = BaseDagOperators(
+        venv_path=venv_path, project_dir=project_dir, log_level=LOG_LEVEL
+    )
 
     check_conf = baseDag.check_configuration_environment_operator()
     check_new_data = baseDag.check_data_availability_task_operator()
@@ -63,6 +67,9 @@ with DAG(
     email_operator = baseDag.report_task_operator(
         datetime.today().strftime("%d/%m/%Y"), email_to=EMAIL_TO
     )
+    process_failed = baseDag.failure_task_operator(
+        datetime.today().strftime("%d/%m/%Y"), email_to=EMAIL_TO
+    )
 
     check_conf >> check_new_data >> [collector, log]
     (
@@ -71,7 +78,6 @@ with DAG(
         >> transformer
         >> validator
         >> log
-        >> email_operator
+        >> [email_operator, process_failed]
     )
-    log >> email_operator
-
+    log >> [email_operator, process_failed]
