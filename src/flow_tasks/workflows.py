@@ -19,6 +19,7 @@ from deter_rt_dag_operators import BaseDagOperators
 
 # get a list of emails to send to, as a string in this format: email1@host.com,email2@host.com,email3@host.com
 EMAIL_TO = Variable.get("GENERAL_EMAIL_TO")
+DETER_RT_EMAIL_TO = Variable.get("DETER_RT_EMAIL_TO")
 # define a log level (CRITICAL = 50, FATAL = CRITICAL, ERROR = 40, WARNING = 30, WARN = WARNING, INFO = 20, DEBUG = 10, NOTSET = 0)
 LOG_LEVEL = Variable.get("DETER_RT_LOG_LEVEL")
 
@@ -29,6 +30,9 @@ if not EMAIL_TO or not LOG_LEVEL:
 
 
 EMAIL_TO = str(EMAIL_TO).split(",")
+if DETER_RT_EMAIL_TO:
+    DETER_RT_EMAIL_TO = str(DETER_RT_EMAIL_TO).split(",")
+    EMAIL_TO = list(set(EMAIL_TO + DETER_RT_EMAIL_TO))
 # Default arguments for all tasks. Precedence is the value at task instantiation.
 task_default_args = {
     "start_date": pendulum.datetime(year=2025, month=1, day=15, tz="America/Sao_Paulo"),
