@@ -103,7 +103,7 @@ class OutputDatabase:
         data = outdb.fetchone(query=sql, logger=self.logger)
         max_date = None
         outdb.close()
-        if data is not None and len(data) > 0:
+        if data and len(data) > 0 and isinstance(data[0], date):
             max_date = date(year=data[0].year, month=data[0].month, day=data[0].day)
 
         return max_date  # type: ignore
@@ -112,12 +112,12 @@ class OutputDatabase:
         """Gets the max date of last downloaded shapefile."""
 
         outdb = self.get_database_facade()
-        sql = f"SELECT TO_CHAR(MAX(last_modified), 'YYYY-MM-DD') FROM public.input_data ip, public.{self.current_table} rt WHERE ip.file_date=rt.view_date AND ip.tile_id=rt.tile_id;"
+        sql = f"SELECT MAX(last_modified)::date FROM public.input_data ip, public.{self.current_table} rt WHERE ip.file_date=rt.view_date AND ip.tile_id=rt.tile_id;"
         data = outdb.fetchone(query=sql, logger=self.logger)
         max_date = None
         outdb.close()
-        if data is not None and len(data) > 0 and data[0]:
-            max_date = datetime.strptime(data[0], "%Y-%m-%d").date()
+        if data is not None and len(data) > 0 and isinstance(data[0], date):
+            max_date = date(year=data[0].year, month=data[0].month, day=data[0].day)
 
         return max_date  # type: ignore
 
