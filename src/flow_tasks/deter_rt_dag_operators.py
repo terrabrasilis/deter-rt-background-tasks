@@ -242,7 +242,7 @@ class BaseDagOperators:
         # conn_id: The Airflow connection ID to use for sending the email (e.g., an SMTP connection).
         report_task_email = EmailOperator(
             task_id="report_task_email",
-            conn_id="SMTP_INPE",
+            conn_id="smtp_default",
             mime_charset="utf-8",
             to=email_to,
             subject=f"✅ DETER-RT - Data released for audit in {updated_date}",
@@ -268,6 +268,8 @@ class BaseDagOperators:
 
         return EmailOperator(
             task_id="process_failed",
+            conn_id="smtp_default",
+            mime_charset="utf-8",
             to=email_to,
             subject=f"❌ DETER-RT - Task Processing Failed",
             html_content=html_content,
