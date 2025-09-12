@@ -75,6 +75,7 @@ CREATE TABLE IF NOT EXISTS public.deter_rt_validados
     view_date date NOT NULL,
     class_name character varying(256),
     created_at date NOT NULL,
+    detection_date date,
     tile_id character varying(256) NOT NULL,
     lat double precision,
     lon double precision,

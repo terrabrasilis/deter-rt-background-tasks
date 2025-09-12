@@ -187,7 +187,7 @@ class OutputDatabase:
         sql = f"""DO $$ DECLARE r RECORD;
                   BEGIN
                       FOR r IN (SELECT table_name FROM information_schema.tables WHERE table_schema='tmp' AND table_type='BASE TABLE') LOOP
-                          EXECUTE 'INSERT INTO public.{self.current_table} (geom, class_name, view_date, detection_date, area_km, tile_id) SELECT ST_Multi(ST_Transform(geometry,4674)), ''DESMATAMENTO_CR'', view_date, "Date_dt"::date, (ST_Area((ST_Transform(geometry,4674))::geography))/1000000, tile_id FROM tmp.' || quote_ident(r.table_name);
+                          EXECUTE 'INSERT INTO public.{self.current_table} (geom, class_name, view_date, detection_date, area_km, tile_id) SELECT ST_Multi(ST_Transform(geometry,4674)), ''alerta'', view_date, "Date_dt"::date, (ST_Area((ST_Transform(geometry,4674))::geography))/1000000, tile_id FROM tmp.' || quote_ident(r.table_name);
                       END LOOP;
                   END $$;"""
         outdb.execute(sql=sql, logger=self.logger)
@@ -214,8 +214,8 @@ class OutputDatabase:
         # Compute difference between DETER_RT and DETER_B
         CREATE_TABLE = f"""
         CREATE TABLE public.{self.intermediary_table} AS
-        SELECT ''::character varying as nome_avaliador1, null::integer as auditar, null::timestamp without time zone as datafim_avaliador1, 
-            area_km, class_name, view_date, now()::date as created_at, tile_id, uuid,
+        SELECT null::character varying as nome_avaliador1, null::integer as auditar, null::timestamp without time zone as datafim_avaliador1, 
+            area_km, b.class_name as optical_class_name, view_date, now()::date as created_at, tile_id, uuid, null::character varying as classe_avaliador1,
             (ST_Multi(ST_CollectionExtract(
                 COALESCE(
                 safe_diff(a.geom,
@@ -246,13 +246,14 @@ class OutputDatabase:
         # DETER_RT alerts are marked as audited by default when DETER_B coverage is greater than or equal to one threshold (50%)
         WITHOUT_AUDIT = f"""
         WITH calculate_area AS (
-            SELECT ST_Area(geom_diff::geography)/1000000 as area_diff,ST_Area(geom_original::geography)/1000000 as area_original, uuid
+            SELECT optical_class_name, ST_Area(geom_diff::geography)/1000000 as area_diff,ST_Area(geom_original::geography)/1000000 as area_original, uuid
             FROM public.{self.intermediary_table}
         )
         UPDATE public.{self.intermediary_table}
-        SET auditar=0, datafim_avaliador1=now()::timestamp without time zone, nome_avaliador1='automatico'
+        SET auditar=0, datafim_avaliador1=now()::timestamp without time zone,
+        classe_avaliador1=b.optical_class_name, nome_avaliador1='automatico'
         FROM calculate_area b
-        WHERE public.{self.intermediary_table}.uuid=b.uuid AND b.area_diff < (b.area_original*{self.threshold})
+        WHERE public.{self.intermediary_table}.uuid=b.uuid AND b.area_diff < (b.area_original*{self.threshold});
         """
 
         # the candidates by bigger areas
@@ -262,7 +263,7 @@ class OutputDatabase:
         WHERE uuid IN (
             SELECT uuid FROM public.{self.intermediary_table}
         WHERE auditar IS NULL AND datafim_avaliador1 IS NULL ORDER BY area_km DESC LIMIT {self.limit_bigger_area}
-        )
+        );
         """
 
         # the candidates by random
@@ -272,14 +273,14 @@ class OutputDatabase:
         WHERE uuid IN (
             SELECT uuid FROM public.{self.intermediary_table}
         WHERE auditar IS NULL AND datafim_avaliador1 IS NULL ORDER BY random() LIMIT {self.limit_random}
-        )
+        );
         """
 
         # Set auditar=0 for anyone who is still null after applying the rules
         ANYONE_STILL_NULL = f"""
         UPDATE public.{self.intermediary_table}
         SET auditar=0
-        WHERE auditar IS NULL AND datafim_avaliador1 IS NULL
+        WHERE auditar IS NULL AND datafim_avaliador1 IS NULL;
         """
 
         # copy the automated audited entries to the audited table
@@ -289,15 +290,16 @@ class OutputDatabase:
         nome_avaliador1, classe_avaliador1, datafim_avaliador1, deltat_avaliador1,
         nome_avaliador2, classe_avaliador2, datafim_avaliador2, deltat_avaliador2,
         geom, created_at, tile_id, auditar)
-        SELECT uuid, ST_X(ST_Centroid(geom_original)) as lon, ST_Y(ST_Centroid(geom_original)) as lat, area_km, view_date, class_name,
-        nome_avaliador1, class_name as classe_avaliador1, datafim_avaliador1, 0 as deltat_avaliador1,
-        nome_avaliador1 as nome_avaliador2, class_name as classe_avaliador2, datafim_avaliador1 as datafim_avaliador2, 0 as deltat_avaliador2,
+        SELECT uuid, ST_X(ST_Centroid(geom_original)) as lon, ST_Y(ST_Centroid(geom_original)) as lat,
+        area_km, view_date, 'alerta'::character varying(256) as class_name,
+        nome_avaliador1, classe_avaliador1, datafim_avaliador1, 0 as deltat_avaliador1,
+        nome_avaliador1 as nome_avaliador2, classe_avaliador1 as classe_avaliador2, datafim_avaliador1 as datafim_avaliador2, 0 as deltat_avaliador2,
         geom_original as geom, created_at, tile_id, auditar
         FROM public.{self.intermediary_table}
         WHERE auditar=1 OR (auditar=0 AND nome_avaliador1='automatico');
         """
 
-        DROP_TMP_TABLE = f"DROP TABLE public.{self.intermediary_table}"
+        DROP_TMP_TABLE = f"DROP TABLE public.{self.intermediary_table};"
 
         # create the intermeriary table without overlap
         outdb.execute(sql=CREATE_TABLE, logger=self.logger)
