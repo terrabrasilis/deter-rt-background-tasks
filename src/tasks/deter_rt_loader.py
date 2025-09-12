@@ -13,6 +13,7 @@ class DeterRTLoader:
     """DeterRTLoader: The DETER RT loader."""
 
     def __init__(self, log_level: str = "DEBUG"):
+        self.log_level = log_level
         self.logger = TasksLogger(self.__class__.__name__)
         self.logger.setLoggerLevel(level=log_level)
         self.data_source = HTTPDataSource(log_level=log_level)
@@ -43,7 +44,7 @@ class DeterRTLoader:
         ext = "shp"
         try:
 
-            engine = OutputDatabase().get_sqlalchemy_engine()
+            engine = OutputDatabase(log_level=self.log_level).get_sqlalchemy_engine()
 
             files = self.__get_files(data_dir=data_dir, extension=ext)
             num_files = len(files)
@@ -105,7 +106,7 @@ class DeterRTLoader:
 
         self.logger.info(f"Found {len(files)} *.{extension} files on {data_dir}")
 
-        files = OutputDatabase().get_input_files_to_import(
+        files = OutputDatabase(log_level=self.log_level).get_input_files_to_import(
             files=files, extension=extension
         )
 
@@ -116,7 +117,7 @@ class DeterRTLoader:
     def __set_imported_file_list(self, files: list[str]):
         """Update the input_data table to set the import_date field."""
 
-        outdb = OutputDatabase()
+        outdb = OutputDatabase(log_level=self.log_level)
         for file_name in files:
             outdb.update_imported_file(file_name=file_name)
 

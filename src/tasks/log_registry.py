@@ -8,7 +8,7 @@ class LogRegistry:
     def __init__(self, log_level: str):
         self.logger = TasksLogger(self.__class__.__name__)
         self.logger.setLoggerLevel(log_level)
-        db = OutputDatabase()
+        db = OutputDatabase(log_level=log_level)
         self.db_facade = db.get_database_facade()
 
     def write(self, description: str = "Missing description", success: bool = False):

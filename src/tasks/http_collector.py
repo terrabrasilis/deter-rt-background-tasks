@@ -18,14 +18,14 @@ class HTTPCollector(Collector):
         self.outdb: OutputDatabase
 
         try:
-            self.outdb = OutputDatabase().get_database_facade(keep_connection=True)
+            self.outdb = OutputDatabase(log_level=self.log_level).get_database_facade(keep_connection=True)
         except Exception as exc:
             self.logger.error("Error connecting to output database.")
             raise exc
 
         try:
 
-            outputdb = OutputDatabase()
+            outputdb = OutputDatabase(log_level=self.log_level)
             reference_date = outputdb.get_max_date_input_file()
 
             file_list = self.data_source.make_shapefile_list(reference_date=reference_date)

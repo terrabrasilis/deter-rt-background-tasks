@@ -15,7 +15,7 @@ class OutputDatabase:
     database: DatabaseFacade = None  # type: ignore
     logger: TasksLogger = None  # type: ignore
 
-    def __init__(self, log_level: str = "WARNING"):
+    def __init__(self, log_level: str):
         self.deter_rt_db_url: Connection = BaseHook.get_connection(
             self.DETER_RT_CONNECTION_ID
         )

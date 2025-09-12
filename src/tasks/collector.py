@@ -10,6 +10,7 @@ class Collector(ABC):
     def __init__(self, log_level: str):
         self.logger = TasksLogger(self.__class__.__name__)
         self.logger.setLoggerLevel(log_level)
+        self.log_level = log_level
 
     @abstractmethod
     def read_data(self):

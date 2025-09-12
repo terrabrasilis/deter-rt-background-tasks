@@ -9,6 +9,7 @@ class SQLViewDataChecker():
     """SQLView DataChecker: Represents a checker data for a Database sources."""
 
     def __init__(self, log_level: str):
+        self.log_level = log_level
         self.logger = TasksLogger(self.__class__.__name__)
         self.logger.setLoggerLevel(level=log_level)
         self.data_source = SQLViewDataSource()
@@ -18,7 +19,7 @@ class SQLViewDataChecker():
 
         output_db: OutputDatabase
         try:
-            output_db = OutputDatabase()
+            output_db = OutputDatabase(log_level=self.log_level)
         except Exception as exc:
             self.logger.error("Failure on SQLViewDataChecker.has_new_data")
             self.logger.error(str(exc))

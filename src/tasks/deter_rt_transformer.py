@@ -11,6 +11,7 @@ class DeterRTTransformer():
     """DeterRTTransformer: The DETER RT data processor."""
 
     def __init__(self, log_level: str="DEBUG"):
+        self.log_level = log_level
         self.logger = TasksLogger(self.__class__.__name__)
         self.logger.setLoggerLevel(level=log_level)
         self.data_source = HTTPDataSource(log_level=log_level)
@@ -40,7 +41,7 @@ class DeterRTTransformer():
     def __update_tmp_data(self):
         """Update the view_date and tile_id on temporary table with the file_date and tile_id from input_data."""
 
-        outdb = OutputDatabase()
+        outdb = OutputDatabase(log_level=self.log_level)
         tmp_tables = outdb.get_tmp_tables()
         for table in tmp_tables:
             outdb.update_tmp_table(table=table)
@@ -48,11 +49,11 @@ class DeterRTTransformer():
     def __tmp_to_final(self,):
         """Read all temporary tables from the tmp schema and insert data into the final table on public schema."""
 
-        outdb = OutputDatabase()
+        outdb = OutputDatabase(log_level=self.log_level)
         outdb.tmp_to_final()
 
     def __remove_tmp_tables(self):
         """Remove all temporary tables from tmp schema."""
 
-        outdb = OutputDatabase()
+        outdb = OutputDatabase(log_level=self.log_level)
         outdb.drop_tmp_tables()
