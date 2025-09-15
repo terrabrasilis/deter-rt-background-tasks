@@ -30,7 +30,7 @@ class SQLViewCollector(Collector):
             raise Exception("Failed to connect to output database")
 
         try:
-            last_deter_date = self.__get_last_deter_date(outdb=outdb)
+            last_deter_date = db.get_last_deter_date()
             self.logger.info(f"last_deter_date={last_deter_date}")
 
             # create dblink extension if not exists
@@ -58,16 +58,3 @@ class SQLViewCollector(Collector):
         finally:
             outdb.close()
 
-    def __get_last_deter_date(self, outdb: DatabaseFacade) -> date:
-        """To get the latest date of DETER data loaded from the data source."""
-
-        sql = f"""SELECT MAX(view_date) FROM public.deter_otico;"""
-        data = outdb.fetchone(query=sql)
-        
-        # the default date based on the project definition
-        deter_date = date(2016, 8, 1)
-
-        if data and data[0]:
-            deter_date = data[0]
-
-        return deter_date

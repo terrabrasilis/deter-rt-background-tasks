@@ -206,133 +206,184 @@ class OutputDatabase:
         outdb.execute(sql=sql, logger=self.logger)
         outdb.commit()
 
+    def get_last_deter_date(self) -> date:
+        """To get the latest date of DETER data loaded from the data source."""
+
+        outdb = self.get_database_facade()
+
+        sql = f"""SELECT MAX(view_date) FROM public.{self.deter_optical_table};"""
+        data = outdb.fetchone(query=sql)
+        
+        # the default date based on the project definition
+        deter_date = date(2016, 8, 1)
+
+        if data and data[0]:
+            deter_date = data[0]
+
+        return deter_date
+
+
     def validate_data(self):
         """Validate the deter rt data with intersection over otical deter."""
 
         outdb = self.get_database_facade()
 
-        # Compute difference between DETER_RT and DETER_B
-        CREATE_TABLE = f"""
-        CREATE TABLE public.{self.intermediary_table} AS
-        SELECT null::character varying as nome_avaliador1, null::integer as auditar, null::timestamp without time zone as datafim_avaliador1, 
-            area_km, b.class_name as optical_class_name, view_date, now()::date as created_at, tile_id, uuid, null::character varying as classe_avaliador1,
-            (ST_Multi(ST_CollectionExtract(
-                COALESCE(
-                safe_diff(a.geom,
-                    ( SELECT st_union(st_buffer(b.geom,0.000000001))
-                    FROM public.{self.deter_optical_table} b
-                    WHERE
-                        b.class_name IN ('DESMATAMENTO_VEG','DESMATAMENTO_CR','MINERACAO')
-                        AND created_at<=now()::date
-                        AND (a.geom && b.geom)
+        CREATE_TABLE = []
+        UPDATE_AREA = []
+        WITHOUT_AUDIT = []
+        COPY_ADITED = []
+        class_group = ["DESMATAMENTO_CR","DESMATAMENTO_VEG","MINERACAO"]
+
+        for class_name in class_group:
+            
+            # Compute difference between DETER_RT and DETER_B
+            CREATE_TABLE.append(f"""
+            CREATE TABLE public.{self.intermediary_table}_{class_name.lower()} AS
+            SELECT null::character varying as nome_avaliador1, null::integer as auditar, null::timestamp without time zone as datafim_avaliador1, 
+                now()::date as created_at, null::character varying as classe_avaliador1,
+                a.area_km, a.view_date, a.tile_id, a.uuid, '{class_name}' as optical_class_name,
+                (ST_Multi(ST_CollectionExtract(
+                    COALESCE(
+                    safe_diff(a.geom,
+                        ( SELECT st_union(st_buffer(b.geom,0.000000001))
+                        FROM public.{self.deter_optical_table} b
+                        WHERE
+                            b.class_name = '{class_name}'
+                            AND created_at<=now()::date
+                            AND (a.geom && b.geom)
+                        )
+                    ),
+                    a.geom
                     )
-                ),
-                a.geom
-                )
-            ,3))
-            ) AS geom_diff,
-            ST_Multi(a.geom) as geom_original
-        FROM public.{self.current_table} a
-        WHERE a.view_date IN(
-            SELECT file_date FROM public.input_data WHERE import_date=now()::date GROUP BY 1
-        );
-        """
+                ,3))
+                ) AS geom_diff,
+                ST_Multi(a.geom) as geom_original
+            FROM public.{self.current_table} a
+            WHERE a.view_date IN(
+                SELECT file_date FROM public.input_data WHERE import_date=now()::date GROUP BY 1
+            );
+            """)
 
-        # update area_km on intermediary table
-        UPDATE_AREA = f"""
-        UPDATE public.{self.intermediary_table} SET area_km=ST_Area(geom_original::geography)/1000000;
-        """
+            # update area_km on intermediary table
+            UPDATE_AREA.append(f"""
+            UPDATE public.{self.intermediary_table}_{class_name.lower()} SET area_km=ST_Area(geom_original::geography)/1000000;
+            """)
 
-        # DETER_RT alerts are marked as audited by default when DETER_B coverage is greater than or equal to one threshold (50%)
-        WITHOUT_AUDIT = f"""
-        WITH calculate_area AS (
-            SELECT optical_class_name, ST_Area(geom_diff::geography)/1000000 as area_diff,ST_Area(geom_original::geography)/1000000 as area_original, uuid
-            FROM public.{self.intermediary_table}
+            # DETER_RT alerts are marked as audited by default when DETER_B coverage is greater than or equal to one threshold (50%)
+            WITHOUT_AUDIT.append(f"""
+            WITH calculate_area AS (
+                SELECT optical_class_name, ST_Area(geom_diff::geography)/1000000 as area_diff,ST_Area(geom_original::geography)/1000000 as area_original, uuid
+                FROM public.{self.intermediary_table}_{class_name.lower()}
+            )
+            UPDATE public.{self.intermediary_table}_{class_name.lower()}
+            SET auditar=0, datafim_avaliador1=now()::timestamp without time zone,
+            classe_avaliador1=b.optical_class_name, nome_avaliador1='automatico'
+            FROM calculate_area b
+            WHERE public.{self.intermediary_table}_{class_name.lower()}.uuid=b.uuid AND b.area_diff < (b.area_original*{self.threshold});
+            """)
+
+            # copy the automated audited entries to the audited table
+            COPY_ADITED.append(f"""
+            INSERT INTO public.{self.audited_table}(
+            uuid, lon, lat, area_km, view_date, class_name,
+            nome_avaliador1, classe_avaliador1, datafim_avaliador1, deltat_avaliador1,
+            nome_avaliador2, classe_avaliador2, datafim_avaliador2, deltat_avaliador2,
+            geom, created_at, tile_id, auditar)
+            SELECT uuid, ST_X(ST_Centroid(geom_original)) as lon, ST_Y(ST_Centroid(geom_original)) as lat,
+            area_km, view_date, 'alerta'::character varying(256) as class_name,
+            nome_avaliador1, classe_avaliador1, datafim_avaliador1, 0 as deltat_avaliador1,
+            nome_avaliador1 as nome_avaliador2, classe_avaliador1 as classe_avaliador2, datafim_avaliador1 as datafim_avaliador2, 0 as deltat_avaliador2,
+            geom_original as geom, created_at, tile_id, auditar
+            FROM public.{self.intermediary_table}_{class_name.lower()}
+            WHERE auditar=0 AND nome_avaliador1='automatico'
+            AND uuid NOT IN (SELECT uuid::uuid FROM public.{self.audited_table});
+            """)
+
+        for sql in CREATE_TABLE:
+            # create the intermeriary table without overlap
+            outdb.execute(sql=sql, logger=self.logger)
+
+        for sql in UPDATE_AREA:
+            # update area
+            outdb.execute(sql=sql, logger=self.logger)
+
+        self.logger.debug(
+            "Marked as audited by default when coverage is greater than or equal to 50%"
         )
-        UPDATE public.{self.intermediary_table}
-        SET auditar=0, datafim_avaliador1=now()::timestamp without time zone,
-        classe_avaliador1=b.optical_class_name, nome_avaliador1='automatico'
-        FROM calculate_area b
-        WHERE public.{self.intermediary_table}.uuid=b.uuid AND b.area_diff < (b.area_original*{self.threshold});
-        """
+        for sql in WITHOUT_AUDIT:
+            # Marked as audited by default when coverage is greater than or equal to 50%
+            outdb.execute(sql=sql, logger=self.logger)
 
-        # the candidates by bigger areas
-        CANDIDATES_BY_AREA = f"""
-        UPDATE public.{self.intermediary_table}
-        SET auditar=1
-        WHERE uuid IN (
-            SELECT uuid FROM public.{self.intermediary_table}
-        WHERE auditar IS NULL AND datafim_avaliador1 IS NULL ORDER BY area_km DESC LIMIT {self.limit_bigger_area}
-        );
-        """
+        self.logger.debug(
+            "Copy data, audited by the automatic method, to the audited data table."
+        )
+        for sql in COPY_ADITED:
+            # Copy data, audited by the automatic method, to the audited data table.
+            outdb.execute(sql=sql, logger=self.logger)
 
-        # the candidates by random
-        CANDIDATES_BY_RANDOM = f"""
-        UPDATE public.{self.intermediary_table}
-        SET auditar=1
-        WHERE uuid IN (
-            SELECT uuid FROM public.{self.intermediary_table}
-        WHERE auditar IS NULL AND datafim_avaliador1 IS NULL ORDER BY random() LIMIT {self.limit_random}
-        );
-        """
-
-        # Set auditar=0 for anyone who is still null after applying the rules
-        ANYONE_STILL_NULL = f"""
-        UPDATE public.{self.intermediary_table}
-        SET auditar=0
-        WHERE auditar IS NULL AND datafim_avaliador1 IS NULL;
-        """
-
-        # copy the automated audited entries to the audited table
-        COPY_TO_ADITED = f"""
+        # copy other data that were not audited yet
+        # these data will be audited by the visual interpretation method
+        COPY_NON_AUDITED = f"""
         INSERT INTO public.{self.audited_table}(
         uuid, lon, lat, area_km, view_date, class_name,
         nome_avaliador1, classe_avaliador1, datafim_avaliador1, deltat_avaliador1,
         nome_avaliador2, classe_avaliador2, datafim_avaliador2, deltat_avaliador2,
         geom, created_at, tile_id, auditar)
-        SELECT uuid, ST_X(ST_Centroid(geom_original)) as lon, ST_Y(ST_Centroid(geom_original)) as lat,
+
+        SELECT uuid, ST_X(ST_Centroid(geom)) as lon, ST_Y(ST_Centroid(geom)) as lat,
         area_km, view_date, 'alerta'::character varying(256) as class_name,
-        nome_avaliador1, classe_avaliador1, datafim_avaliador1, 0 as deltat_avaliador1,
-        nome_avaliador1 as nome_avaliador2, classe_avaliador1 as classe_avaliador2, datafim_avaliador1 as datafim_avaliador2, 0 as deltat_avaliador2,
-        geom_original as geom, created_at, tile_id, auditar
-        FROM public.{self.intermediary_table}
-        WHERE auditar=1 OR (auditar=0 AND nome_avaliador1='automatico');
+        null::character varying, null::character varying, null::timestamp without time zone, 0 as deltat_avaliador1,
+        null::character varying, null::character varying, null::timestamp without time zone, 0 as deltat_avaliador2,
+        geom, created_at, tile_id, null::integer as auditar
+        FROM public.{self.current_table} 
+        WHERE uuid NOT IN (SELECT uuid::uuid FROM public.{self.audited_table})
+        AND view_date IN(
+            SELECT file_date FROM public.input_data WHERE import_date=now()::date GROUP BY 1
+        );
         """
+        outdb.execute(sql=COPY_NON_AUDITED, logger=self.logger)
 
-        DROP_TMP_TABLE = f"DROP TABLE public.{self.intermediary_table};"
 
-        # create the intermeriary table without overlap
-        outdb.execute(sql=CREATE_TABLE, logger=self.logger)
-        # update area
-        outdb.execute(sql=UPDATE_AREA, logger=self.logger)
-
-        # Marked as audited by default when coverage is greater than or equal to 50%
-        outdb.execute(sql=WITHOUT_AUDIT, logger=self.logger)
-        self.logger.info(
-            "Marked as audited by default when coverage is greater than or equal to 50%"
-        )
-
+        # the candidates by bigger areas
+        CANDIDATES_BY_AREA = f"""
+        UPDATE public.{self.audited_table}
+        SET auditar=1
+        WHERE uuid IN (
+            SELECT uuid FROM public.{self.audited_table}
+            WHERE auditar IS NULL AND datafim_avaliador1 IS NULL ORDER BY area_km DESC LIMIT {self.limit_bigger_area}
+        );
+        """
         # Update audit to 1 to the first limit_bigger_area candidates
         outdb.execute(sql=CANDIDATES_BY_AREA, logger=self.logger)
         self.logger.info(f"Define the first {self.limit_bigger_area} candidates")
 
+        # the candidates by random
+        CANDIDATES_BY_RANDOM = f"""
+        UPDATE public.{self.audited_table}
+        SET auditar=1
+        WHERE uuid IN (
+            SELECT uuid FROM public.{self.audited_table}
+            WHERE auditar IS NULL AND datafim_avaliador1 IS NULL ORDER BY random() LIMIT {self.limit_random}
+        );
+        """
         # Update audit to 1 to the random limit_random candidates
         outdb.execute(sql=CANDIDATES_BY_RANDOM, logger=self.logger)
         self.logger.info(f"Define the random {self.limit_random} candidates")
 
-        # Update the audit to 0 for the residual
+        # delete any that are still null after applying the rules
+        ANYONE_STILL_NULL = f"""
+        DELETE FROM public.{self.audited_table}
+        WHERE auditar IS NULL AND datafim_avaliador1 IS NULL;
+        """
+        # delete the residual from the audited table
         outdb.execute(sql=ANYONE_STILL_NULL, logger=self.logger)
-        self.logger.info("Update the auditar to 0 for the residual")
-
-        # Copy data, audited by the automatic method, to the audited data table.
-        outdb.execute(sql=COPY_TO_ADITED, logger=self.logger)
-        self.logger.info(
-            "Copy data, audited by the automatic method, to the audited data table."
-        )
-
-        # drop the temporary table
-        outdb.execute(sql=DROP_TMP_TABLE, logger=self.logger)
-        self.logger.info(f"Drop the temporary table ({self.intermediary_table})")
+        self.logger.info("delete the residual from the audited table")        
+        
+        # drop the temporary tables
+        for class_name in class_group:
+            DROP_TMP_TABLE = f"DROP TABLE public.{self.intermediary_table}_{class_name.lower()};"
+            outdb.execute(sql=DROP_TMP_TABLE, logger=self.logger)
+            self.logger.info(f"Drop the temporary table ({self.intermediary_table}_{class_name.lower()})")
 
         outdb.commit()
 
