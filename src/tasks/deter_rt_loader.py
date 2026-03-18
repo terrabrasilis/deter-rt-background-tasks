@@ -24,12 +24,12 @@ class DeterRTLoader:
         try:
             tmp_dir = self.data_source.get_tmp_directory()
 
-            temporary_tables = self.__shapefile_to_postgis(tmp_dir)
+            temporary_tables, wrong_files = self.__shapefile_to_postgis(tmp_dir)
 
             self.__set_imported_file_list(files=temporary_tables)
 
             # store all imported files to bkp directory
-            self.__backup_files(tmp_dir=tmp_dir)
+            self.__backup_files(tmp_dir=tmp_dir, wrong_files=wrong_files)
 
         except Exception as ex:
             ex_msg = "Failed to load data to output database"
@@ -37,10 +37,11 @@ class DeterRTLoader:
             self.logger.error(f"{ex}")
             raise Exception(ex_msg)
 
-    def __shapefile_to_postgis(self, data_dir: str) -> list[str]:
+    def __shapefile_to_postgis(self, data_dir: str) -> tuple[list[str],list[str]]:
         """Import shapefiles to temporary table on Postgres/Postgis database."""
 
         tables = []
+        wrong_files = []
         ext = "shp"
         try:
 
@@ -50,20 +51,28 @@ class DeterRTLoader:
             num_files = len(files)
             for filein in sorted(files):
 
+                # get name of file without extension
+                filein_tmp = str(str(filein).split(f".{ext}")[0]).split("/")
+                table_name = filein_tmp[len(filein_tmp) - 1]
+
                 # Read shapefile using GeoPandas
                 try:
                     self.logger.debug(f"Reading shapefile {filein}")
-                    gdf = gpd.read_file(filein)
+                    gdf = gpd.read_file(filein, engine="fiona")
+                    if gdf.crs is not None:
+                        self.logger.debug(f"CRS {gdf.crs} to shapefile {filein_tmp}")
+                    else:
+                        self.logger.error(f"Failed to read CRS for shapefile {filein_tmp}")
+                        wrong_files.append(filein_tmp)
+                        continue
+
                 except Exception as ex:
-                    self.logger.error(f"Failed to read shapefile {filein}")
+                    self.logger.error(f"Failed to read shapefile {filein_tmp}")
                     self.logger.error(f"{ex}")
+                    wrong_files.append(filein_tmp)
                     continue
 
-                # get name of file without extension
-                filein = str(str(filein).split(f".{ext}")[0]).split("/")
-                table_name = filein[len(filein) - 1]
-
-                self.logger.debug(f"Importing shapefile {filein} to table {table_name}")
+                self.logger.debug(f"Importing shapefile {filein_tmp} to table {table_name}")
 
                 # Import shapefile to database
                 gdf.to_postgis(
@@ -76,9 +85,6 @@ class DeterRTLoader:
                 )
 
                 tables.append(table_name)
-
-                # remove shapefile
-                # os.system(str("rm -f {:s}.*".format(filein)))
 
             if num_files == 0:
                 self.logger.warning(f"No {ext} files found on {data_dir}")
@@ -97,7 +103,7 @@ class DeterRTLoader:
             self.logger.error(f"{ex}")
             raise Exception(ex_msg)
 
-        return tables
+        return tables, wrong_files
 
     def __get_files(self, data_dir: str, extension: str) -> list[str]:
         """Get all files from a data directory, as per the extension."""
@@ -121,13 +127,14 @@ class DeterRTLoader:
         for file_name in files:
             outdb.update_imported_file(file_name=file_name)
 
-    def __backup_files(self, tmp_dir: str, extension_list: list = []):
+    def __backup_files(self, tmp_dir: str, wrong_files: list [str], extension_list: list [str] = []):
         """
         Store all files from a temporary directory to backup directory, as per the extension list.
 
         Parameters:
         ----
         :param:tmp_dir a location to find files.
+        :param:wrong_files a list of files that were not imported correctly into the database.
         :param:extension_list a list of file extensions like this: ['shz','sbn','sbx','dbf','prj','shx','shp','cpg','xml']
         """
 
@@ -157,5 +164,8 @@ class DeterRTLoader:
             root_dir=tmp_dir,
         )
 
+        # remove files 
         for f in any_files:
-            pathlib.Path(f).unlink(missing_ok=True)
+            # only if was imported properly to database.
+            if f not in wrong_files:
+                pathlib.Path(f).unlink(missing_ok=True)
