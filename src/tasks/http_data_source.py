@@ -41,7 +41,7 @@ class HTTPDataSource:
         url = self.get_data_source_base_url()
         user, password = self.get_data_source_credential()
 
-        self.options = {
+        options = {
             "webdav_hostname": url,
             "webdav_login": user,
             "webdav_password": password,
@@ -50,7 +50,7 @@ class HTTPDataSource:
         }
 
         try:
-            client = Client(options=self.options)
+            client = Client(options=options)
         except ConnectionException as connexc:
             self.logger.error("WebDav connection failed.")
             raise connexc
@@ -101,6 +101,8 @@ class HTTPDataSource:
         file_name = file['file_name']
         remote_path_base = f"{self.get_remote_directory()}/{file_name}"
         local_path_base = f"{self.get_tmp_directory()}/{file_name}"
+        url = self.get_data_source_base_url()
+        username, password = self.get_data_source_credential()
 
         # if file already exists, avoid download again
         if os.path.isfile(path=local_path_base):
@@ -109,9 +111,10 @@ class HTTPDataSource:
             self.logger.debug(f"The local file needs to be updated.")
 
             try:
-                self.download_from_webdav(url=f"{self.options["webdav_hostname"]}/{remote_path_base}",
-                                          local_filename=local_path_base, username=self.options["webdav_login"],
-                                          password=self.options["webdav_password"])
+                self.download_from_webdav(url=f"{url}/{remote_path_base}",
+                                          local_filename=local_path_base,
+                                          username=username,
+                                          password=password)
             except HTTPError as http_err:
                 # Catches 4xx or 5xx errors
                 self.logger.error("Failure while trying to download file from data source.")
