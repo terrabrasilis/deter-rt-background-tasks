@@ -18,6 +18,7 @@ class BaseDagOperators:
         self.log_level = log_level
         self.requirements = [
             "requests",
+            "pyproj",
             "psycopg2-binary",
             "geopandas==0.13.2",
             "fiona==1.9.6",
