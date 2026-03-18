@@ -1,13 +1,16 @@
 import os
 import pathlib
+import requests
+from requests.exceptions import HTTPError, RequestException
 from airflow.models import Connection
 from airflow.hooks.base import BaseHook
 from utils.logger import TasksLogger
 from webdav3.client import Client
-from webdav3.exceptions import ConnectionException, WebDavException, ResponseErrorCode
+from webdav3.exceptions import ConnectionException
 from datetime import date
 from utils.database_facade import DatabaseFacade
 from datetime import datetime
+from time import sleep
 
 
 class HTTPDataSource:
@@ -21,6 +24,7 @@ class HTTPDataSource:
         self.logger = TasksLogger(self.__class__.__name__)
         self.logger.setLoggerLevel(level=log_level)
         self.__fill_airflow_configuration()
+        self.client = self.__connect()
 
     def __fill_airflow_configuration(self):
 
@@ -37,14 +41,16 @@ class HTTPDataSource:
         url = self.get_data_source_base_url()
         user, password = self.get_data_source_credential()
 
-        options = {
+        self.options = {
             "webdav_hostname": url,
             "webdav_login": user,
             "webdav_password": password,
+            "webdav_root": "/",
+            "webdav_verbose": "on"
         }
 
         try:
-            client = Client(options=options)
+            client = Client(options=self.options)
         except ConnectionException as connexc:
             self.logger.error("WebDav connection failed.")
             raise connexc
@@ -59,10 +65,8 @@ class HTTPDataSource:
         self.logger.debug(f"{remote_path_base} path on remote server.")
         self.logger.debug(f"{','.join(shapefile_extensions)} shapefiles extensions.")
 
-        client = self.__connect()
-
-        if client.check(remote_path=remote_path_base):
-            remote_folder_info = client.list(remote_path_base, get_info=True)
+        if self.client.check(remote_path=remote_path_base):
+            remote_folder_info = self.client.list(remote_path_base, get_info=True)
             self.logger.debug(f"{len(remote_folder_info)} files found on remote server.")
 
             for item in remote_folder_info:
@@ -98,31 +102,38 @@ class HTTPDataSource:
         remote_path_base = f"{self.get_remote_directory()}/{file_name}"
         local_path_base = f"{self.get_tmp_directory()}/{file_name}"
 
-        client = self.__connect()
-
         # if file already exists, avoid download again
         if os.path.isfile(path=local_path_base):
-            self.logger.debug(f"Local file is up to date. Skipping download step.")
+            self.logger.debug(f"Local file already exists, avoid download again.")
         else:
             self.logger.debug(f"The local file needs to be updated.")
 
             try:
-                client.download_sync(remote_path=remote_path_base, local_path=local_path_base)
-            except WebDavException as wexc:
+                self.download_from_webdav(url=f"{self.options["webdav_hostname"]}/{remote_path_base}",
+                                          local_filename=local_path_base, username=self.options["webdav_login"],
+                                          password=self.options["webdav_password"])
+            except HTTPError as http_err:
+                # Catches 4xx or 5xx errors
                 self.logger.error("Failure while trying to download file from data source.")
-                self.logger.error(str(wexc))
-                if isinstance(wexc, ResponseErrorCode) and wexc.code == 404:
+                self.logger.error(f"HTTP error occurred: {http_err}")
+                self.logger.error(f"Status Code: {http_err.response.status_code}")
+                if http_err.response.status_code == 404:
                     # do not try again if the file was not found
                     self.logger.error(f"File not found: {remote_path_base}")
                     raise FileNotFoundError
-                else:
-                    self.logger.info("Retrying the download...")
-                    self.download_file(output_db=output_db, file=file)
+            except RequestException as err:
+                # Catches broader issues like ConnectionError, Timeout, etc.
+                self.logger.error(f"Other error occurred: {err}")
             except Exception as exc:
                 self.logger.error("Failure while trying to download file from data source.")
                 raise exc
 
-            self.logger.info(f"file_name={file_name}")
+            if not os.path.isfile(path=local_path_base):
+                self.logger.info("Retrying the download after 5 seconds...")
+                sleep(5)
+                self.download_file(output_db=output_db, file=file)
+            else:
+                self.logger.info(f"file_name={file_name}")
 
         try:
             self.__registry_on_control_table(output_db=output_db, file=file)
@@ -243,3 +254,25 @@ class HTTPDataSource:
         extension_list = str(self.data_source_config.extra_dejson.get("shapefile_extensions")).split(",")
 
         return extension_list
+
+    def download_from_webdav(self, url, local_filename, username, password):
+        """
+        Downloads a file from a WebDAV URL using the requests library.
+        Raise request exceptions.
+
+        Args:
+            url (str): The full URL to the file on the WebDAV server.
+            local_filename (str): The path to save the file locally.
+            username (str): The WebDAV username.
+            password (str): The WebDAV password.
+        """
+        # Use requests.get with stream=True for efficient handling of large files
+        response = requests.get(url, auth=(username, password), stream=True)
+        response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
+
+        # Write the file content in chunks
+        with open(local_filename, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk: # filter out keep-alive new chunks
+                    f.write(chunk)
+        print(f"Successfully downloaded {local_filename}")
