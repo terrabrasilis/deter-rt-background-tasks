@@ -1,8 +1,9 @@
 import os
+from datetime import date
 from tasks.collector import Collector
 from tasks.http_data_source import HTTPDataSource
 from tasks.output_database import OutputDatabase
-from datetime import date
+from utils.database_facade import DatabaseFacade
 
 
 class HTTPCollector(Collector):
@@ -15,7 +16,7 @@ class HTTPCollector(Collector):
     def read_data(self):
         """Read data using request by an URL"""
 
-        self.outdb: OutputDatabase
+        self.outdb: DatabaseFacade
 
         try:
             self.outdb = OutputDatabase(log_level=self.log_level).get_database_facade(keep_connection=True)
