@@ -8,7 +8,6 @@ from airflow.operators.python import (
 from airflow.hooks.base import BaseHook
 from airflow.utils.trigger_rule import TriggerRule
 from airflow.providers.smtp.operators.smtp import EmailOperator
-from airflow.providers.standard.operators.empty import EmptyOperator
 
 
 class BaseDagOperators:
@@ -90,7 +89,16 @@ class BaseDagOperators:
         )
     
     def end_task(self):
-        return EmptyOperator(task_id="not_to_do")
+        
+        def fnc_operator():
+            pass
+
+        return PythonOperator(
+            task_id="not_to_do"
+            requirements=self.requirements,
+            venv_cache_path=f"{self.venv_path}",
+            python_callable=fnc_operator
+        )
 
     def collector_task_operator(self):
 
