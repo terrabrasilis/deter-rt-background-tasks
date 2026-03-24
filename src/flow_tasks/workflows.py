@@ -77,8 +77,9 @@ with DAG(
     process_failed = baseDag.failure_task_operator(
         datetime.today().strftime("%d/%m/%Y"), email_to=EMAIL_TO
     )
+    end = baseDag.end_task()
 
-    check_conf >> check_new_data >> [collector, log]
+    check_conf >> check_new_data >> [collector, end]
     (
         collector
         >> loader

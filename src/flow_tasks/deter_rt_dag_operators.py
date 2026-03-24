@@ -8,6 +8,7 @@ from airflow.operators.python import (
 from airflow.hooks.base import BaseHook
 from airflow.utils.trigger_rule import TriggerRule
 from airflow.providers.smtp.operators.smtp import EmailOperator
+from airflow.providers.standard.operators.empty import EmptyOperator
 
 
 class BaseDagOperators:
@@ -71,7 +72,7 @@ class BaseDagOperators:
             if deterRTDataChecker.has_new_data():
                 return "collector_task"
             else:
-                return "log_registry_task"
+                return "not_to_do"
 
         return BranchPythonVirtualenvOperator(
             task_id="check_data_availability",
@@ -87,6 +88,9 @@ class BaseDagOperators:
             email_on_retry=True,
             retries=3,
         )
+    
+    def end_task(self):
+        return EmptyOperator(task_id="not_to_do")
 
     def collector_task_operator(self):
 
