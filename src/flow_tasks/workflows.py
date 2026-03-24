@@ -52,8 +52,9 @@ description = f"This flow represents the process to get files from NextCloud COI
 with DAG(
     dag_id=DAG_KEY,
     description=description,
+    max_active_runs=1,
     start_date=pendulum.datetime(year=2025, month=8, day=11, tz="America/Sao_Paulo"),
-    schedule_interval='0 5 * * *',
+    schedule_interval='10 * * * *',
     catchup=False,
     default_args=task_default_args,
     tags=['DETER-RT', 'RADAR', 'DETER'],

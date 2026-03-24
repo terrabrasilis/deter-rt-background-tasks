@@ -57,6 +57,12 @@ class HTTPDataSource:
 
         return client
 
+    def lock_file_exists(self, lock_file: str) -> bool:
+        remote_path_base = f"{self.get_remote_directory()}"
+        self.logger.debug(f"{remote_path_base} path on remote server.")
+
+        return self.client.check(remote_path=f"{remote_path_base}/{lock_file}")
+
     def make_shapefile_list(self, reference_date: date) -> list[dict]:
         shp_files = []
 
