@@ -95,7 +95,7 @@ class BaseDagOperators:
             pass
 
         return PythonOperator(
-            task_id="not_to_do"
+            task_id="not_to_do",
             python_callable=fnc_operator
         )
 
