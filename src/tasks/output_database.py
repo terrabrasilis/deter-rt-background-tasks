@@ -241,7 +241,7 @@ class OutputDatabase:
             CREATE TABLE public.{self.intermediary_table}_{class_name.lower()} AS
             SELECT null::character varying as nome_avaliador1, null::integer as auditar, null::timestamp without time zone as datafim_avaliador1, 
                 now()::date as created_at, null::character varying as classe_avaliador1,
-                a.area_km, a.view_date, a.tile_id, a.uuid, '{class_name}' as optical_class_name,
+                a.area_km, a.view_date, a.detection_date, a.tile_id, a.uuid, '{class_name}' as optical_class_name,
                 (ST_Multi(ST_CollectionExtract(
                     COALESCE(
                     safe_diff(a.geom,
@@ -285,12 +285,13 @@ class OutputDatabase:
             # copy the automated audited entries to the audited table
             COPY_ADITED.append(f"""
             INSERT INTO public.{self.audited_table}(
-            uuid, lon, lat, area_km, view_date, class_name,
+            uuid, lon, lat, area_km, view_date, detection_date, class_name,
             nome_avaliador1, classe_avaliador1, datafim_avaliador1, deltat_avaliador1,
             nome_avaliador2, classe_avaliador2, datafim_avaliador2, deltat_avaliador2,
             geom, created_at, tile_id, auditar)
+            
             SELECT uuid, ST_X(ST_Centroid(geom_original)) as lon, ST_Y(ST_Centroid(geom_original)) as lat,
-            area_km, view_date, 'alerta'::character varying(256) as class_name,
+            area_km, view_date, detection_date, 'alerta'::character varying(256) as class_name,
             nome_avaliador1, classe_avaliador1, datafim_avaliador1, 0 as deltat_avaliador1,
             nome_avaliador1 as nome_avaliador2, classe_avaliador1 as classe_avaliador2, datafim_avaliador1 as datafim_avaliador2, 0 as deltat_avaliador2,
             geom_original as geom, created_at, tile_id, auditar
@@ -325,13 +326,13 @@ class OutputDatabase:
         # these data will be audited by the visual interpretation method
         COPY_NON_AUDITED = f"""
         INSERT INTO public.{self.audited_table}(
-        uuid, lon, lat, area_km, view_date, class_name,
+        uuid, lon, lat, area_km, view_date, detection_date, class_name,
         nome_avaliador1, classe_avaliador1, datafim_avaliador1, deltat_avaliador1,
         nome_avaliador2, classe_avaliador2, datafim_avaliador2, deltat_avaliador2,
         geom, created_at, tile_id, auditar)
 
         SELECT uuid, ST_X(ST_Centroid(geom)) as lon, ST_Y(ST_Centroid(geom)) as lat,
-        area_km, view_date, 'alerta'::character varying(256) as class_name,
+        area_km, view_date, detection_date, 'alerta'::character varying(256) as class_name,
         null::character varying, null::character varying, null::timestamp without time zone, 0 as deltat_avaliador1,
         null::character varying, null::character varying, null::timestamp without time zone, 0 as deltat_avaliador2,
         geom, created_at, tile_id, null::integer as auditar
