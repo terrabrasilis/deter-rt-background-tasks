@@ -207,7 +207,7 @@ class BaseDagOperators:
             venv_cache_path=f"{self.venv_path}",
             python_callable=fnc_operator,
             provide_context=True,
-            trigger_rule=TriggerRule.NONE_FAILED,
+            trigger_rule=TriggerRule.NONE_SKIPPED,
             op_kwargs={
                 "project_dir": f"{self.project_dir}",
                 "log_level": f"{self.log_level}",
