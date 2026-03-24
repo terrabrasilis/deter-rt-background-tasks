@@ -1,6 +1,7 @@
 import sys
 
 from airflow.operators.python import (
+    PythonOperator,
     PythonVirtualenvOperator,
     BranchPythonVirtualenvOperator,
     ShortCircuitOperator,
@@ -95,8 +96,6 @@ class BaseDagOperators:
 
         return PythonOperator(
             task_id="not_to_do"
-            requirements=self.requirements,
-            venv_cache_path=f"{self.venv_path}",
             python_callable=fnc_operator
         )
 
