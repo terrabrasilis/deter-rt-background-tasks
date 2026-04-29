@@ -23,6 +23,7 @@ class DeterRTTransformer():
 
         try:
             self.__update_tmp_data()
+            self.__geom_intersect_union()
             self.__tmp_to_final()
         except Exception as ex:
             self.logger.error(f"Error processing data: {ex}")
@@ -41,6 +42,12 @@ class DeterRTTransformer():
         tmp_tables = outdb.get_tmp_tables()
         for table in tmp_tables:
             outdb.update_tmp_table(table=table)
+            
+    def __geom_intersect_union(self):
+        """Unifies all intersecting geometries into a single merged geometry."""
+
+        outdb = OutputDatabase(log_level=self.log_level)
+        outdb.geom_intersect_union()
 
     def __tmp_to_final(self,):
         """Read all temporary tables from the tmp schema and insert data into the final table on public schema."""
@@ -48,8 +55,8 @@ class DeterRTTransformer():
         outdb = OutputDatabase(log_level=self.log_level)
         outdb.tmp_to_final()
 
-    def __remove_tmp_tables(self):
-        """Remove all temporary tables from tmp schema."""
+    # def __remove_tmp_tables(self):
+    #     """Remove all temporary tables from tmp schema."""
 
-        outdb = OutputDatabase(log_level=self.log_level)
-        outdb.drop_tmp_tables()
+    #     outdb = OutputDatabase(log_level=self.log_level)
+    #     outdb.drop_tmp_tables()

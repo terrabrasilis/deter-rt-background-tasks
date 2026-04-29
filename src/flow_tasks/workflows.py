@@ -71,9 +71,9 @@ with DAG(
     transformer = baseDag.transformer_task_operator()
     validator = baseDag.validator_task_operator()
     log = baseDag.log_registry_task_operator()
-    email_operator = baseDag.report_task_operator(
-        datetime.today().strftime("%d/%m/%Y"), email_to=EMAIL_TO
-    )
+    # email_operator = baseDag.report_task_operator(
+    #     datetime.today().strftime("%d/%m/%Y"), email_to=EMAIL_TO
+    # )
     process_failed = baseDag.failure_task_operator(
         datetime.today().strftime("%d/%m/%Y"), email_to=EMAIL_TO
     )
@@ -86,6 +86,6 @@ with DAG(
         >> transformer
         >> validator
         >> log
-        >> [email_operator, process_failed]
+        # >> [email_operator, process_failed]
     )
-    log >> [email_operator, process_failed]
+    # log >> [email_operator, process_failed]
