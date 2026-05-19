@@ -24,7 +24,7 @@ class OutputDatabase:
         self.logger.setLoggerLevel(level=log_level)
 
         # validation parameters
-        self.current_table = "deter_rt"
+        self.current_table = "deter_rt_dupl"
         self.temp_table = "deter_rt_temp"
         self.deter_optical_table = "deter_otico"
         self.audited_table = "deter_rt_validados"
