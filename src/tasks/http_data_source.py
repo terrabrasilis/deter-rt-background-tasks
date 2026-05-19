@@ -62,8 +62,12 @@ class HTTPDataSource:
         self.logger.debug(f"{remote_path_base} path on remote server.")
 
         return self.client.check(remote_path=f"{remote_path_base}/{lock_file}")
+    
+    def verify_file_exists(self, output_db: DatabaseFacade, file_name: str) -> bool:
+        sql = f"""SELECT 1 FROM public.input_data WHERE file_name = '{file_name}' LIMIT 1;"""
+        return bool(output_db.fetchone(sql))
 
-    def make_shapefile_list(self, reference_date: date) -> list[dict]:
+    def make_shapefile_list(self, reference_date: date, output_db: DatabaseFacade) -> list[dict]:
         shp_files = []
 
         remote_path_base = f"{self.get_remote_directory()}"
@@ -77,17 +81,18 @@ class HTTPDataSource:
 
             for item in remote_folder_info:
                 if not item['isdir'] and str(os.path.basename(item['path'])).endswith(shapefile_extensions):
-
-                    file_date = datetime.strptime(item['modified'], '%a, %d %b %Y %H:%M:%S %Z').date()
-                    if reference_date is None or file_date > reference_date:
-                        item_tmp = {
-                            'size':item['size'],
-                            'modified':file_date.strftime('%Y-%m-%d'),
-                            'path':item['path'],
-                            'etag':item['etag'],
-                            'file_name':os.path.basename(item['path'])
-                        }
-                        shp_files.append(item_tmp)
+                    file_exists = self.verify_file_exists(output_db=output_db, file_name=os.path.basename(item['path']))
+                    if file_exists is False:
+                        file_date = datetime.strptime(item['modified'], '%a, %d %b %Y %H:%M:%S %Z').date()
+                        if reference_date is None or file_date > reference_date:
+                            item_tmp = {
+                                'size':item['size'],
+                                'modified':file_date.strftime('%Y-%m-%d'),
+                                'path':item['path'],
+                                'etag':item['etag'],
+                                'file_name':os.path.basename(item['path'])
+                            }
+                            shp_files.append(item_tmp)
 
         self.logger.info(f"{len(shp_files)} files found on remote server.")
 

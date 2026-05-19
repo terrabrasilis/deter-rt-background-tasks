@@ -172,3 +172,26 @@ CREATE OR REPLACE FUNCTION safe_diff(geom_a geometry, geom_b geometry)
 END
 $$
 LANGUAGE 'plpgsql' STABLE STRICT;
+
+
+CREATE TABLE IF NOT EXISTS public.deter_rt_temp
+(
+    id serial,
+    uuid uuid NOT NULL DEFAULT gen_random_uuid(),
+    geom geometry(MultiPolygon,4674) NOT NULL,
+    class_name character varying(256) NOT NULL,
+    view_date date NOT NULL,
+    area_km double precision NOT NULL,
+    created_at date NOT NULL DEFAULT (now())::date,
+    tile_id character varying(256) NOT NULL,
+    detection_date date,
+    CONSTRAINT deter_rt_temp_pkey PRIMARY KEY (uuid)
+);
+
+-- DROP INDEX IF EXISTS public.deter_rt_geom_idx;
+
+CREATE INDEX IF NOT EXISTS deter_rt_tem_geom_idx
+    ON public.deter_rt_temp USING gist
+    (geom)
+    WITH (buffering=auto)
+    TABLESPACE pg_default;

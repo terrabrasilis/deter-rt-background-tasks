@@ -29,7 +29,7 @@ class HTTPCollector(Collector):
             outputdb = OutputDatabase(log_level=self.log_level)
             reference_date = outputdb.get_max_date_input_file()
 
-            file_list = self.data_source.make_shapefile_list(reference_date=reference_date)
+            file_list = self.data_source.make_shapefile_list(reference_date=reference_date, output_db=self.outdb)
 
             for file in file_list:
                 self.data_source.download_file(output_db=self.outdb, file=file)

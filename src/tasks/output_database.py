@@ -25,6 +25,7 @@ class OutputDatabase:
 
         # validation parameters
         self.current_table = "deter_rt"
+        self.temp_table = "deter_rt_temp"
         self.deter_optical_table = "deter_otico"
         self.audited_table = "deter_rt_validados"
         self.intermediary_table = "by_percentage_of_coverage"
@@ -179,210 +180,86 @@ class OutputDatabase:
         sql = f"""UPDATE tmp."{table}" AS tmp SET view_date=ip.file_date, tile_id=ip.tile_id FROM public.input_data AS ip WHERE ip.file_name='{table}.shp';"""
         outdb.execute(sql=sql, logger=self.logger)
         outdb.commit()
-        
-    def geom_intersect_union(self):
-        """
-        Unifies duplicated geometries using leader clustering.
-
-        Rule:
-        - Largest area becomes leader
-        - Any geometry with >=80% overlap with leader joins cluster
-        - Cluster geometries are merged
-        - Process repeats until no candidates remain
-        """
-
-        outdb = self.get_database_facade()
-
-        self.logger.info("Starting geom_intersect_union using leader clustering...")
-
-        # Safety cleanup
-        outdb.execute(
-            sql=f"TRUNCATE TABLE public.{self.geom_intersect_union_table};",
-            logger=self.logger
-        )
-
-        # Temporary working table
-        sql_prepare = f"""
-            DROP TABLE IF EXISTS tmp_geom_candidates;
-
-            CREATE TEMP TABLE tmp_geom_candidates AS
-            SELECT
-                uuid,
-                geom,
-                class_name,
-                view_date,
-                area_km,
-                created_at,
-                tile_id,
-                detection_date,
-                FALSE AS processed
-            FROM public.{self.geom_intersect_candidates_table};
-
-            CREATE INDEX idx_tmp_geom_candidates_geom
-                ON tmp_geom_candidates
-                USING GIST (geom);
-
-            CREATE INDEX idx_tmp_geom_candidates_processed
-                ON tmp_geom_candidates(processed);
-
-            CREATE INDEX idx_tmp_geom_candidates_area
-                ON tmp_geom_candidates(area_km DESC);
-        """
-
-        outdb.execute(sql=sql_prepare, logger=self.logger)
-        outdb.commit()
-
-        total_clusters = 0
-
-        while True:
-            # Get next leader (largest unprocessed)
-            leader = outdb.fetch_one("""
-                SELECT
-                    uuid,
-                    geom,
-                    class_name,
-                    view_date,
-                    area_km,
-                    created_at,
-                    tile_id,
-                    detection_date
-                FROM tmp_geom_candidates
-                WHERE processed = FALSE
-                ORDER BY area_km DESC
-                LIMIT 1;
-            """)
-
-            if not leader:
-                break
-
-            total_clusters += 1
-            leader_uuid = leader["uuid"]
-
-            self.logger.info(
-                f"Processing cluster {total_clusters} - leader {leader_uuid}"
-            )
-
-            # Insert merged cluster
-            sql_insert = f"""
-                INSERT INTO public.{self.geom_intersect_union_table} (
-                    uuid,
-                    geom,
-                    class_name,
-                    view_date,
-                    area_km,
-                    created_at,
-                    tile_id,
-                    detection_date
-                )
-                SELECT
-                    '{leader["uuid"]}',
-                    ST_UnaryUnion(ST_Collect(t.geom)),
-                    '{leader["class_name"]}',
-                    '{leader["view_date"]}',
-                    {leader["area_km"]},
-                    '{leader["created_at"]}',
-                    '{leader["tile_id"]}',
-                    '{leader["detection_date"]}'
-                FROM tmp_geom_candidates t
-                WHERE processed = FALSE
-                AND (
-                        t.uuid = '{leader["uuid"]}'
-                        OR (
-                            t.uuid <> '{leader["uuid"]}'
-                            AND t.geom && '{leader["geom"]}'::geometry
-                            AND ST_Intersects(
-                                t.geom,
-                                '{leader["geom"]}'::geometry
-                            )
-                            AND (
-                                ST_Area(
-                                    ST_Intersection(
-                                        t.geom,
-                                        '{leader["geom"]}'::geometry
-                                    )
-                                )
-                                /
-                                NULLIF(
-                                    LEAST(
-                                        ST_Area(t.geom),
-                                        ST_Area('{leader["geom"]}'::geometry)
-                                    ),
-                                    0
-                                )
-                            ) >= 0.8
-                        )
-                );
-            """
-
-            outdb.execute(sql=sql_insert, logger=self.logger)
-
-            # Mark cluster rows as processed
-            sql_update = f"""
-                UPDATE tmp_geom_candidates t
-                SET processed = TRUE
-                WHERE processed = FALSE
-                AND (
-                        t.uuid = '{leader["uuid"]}'
-                        OR (
-                            t.uuid <> '{leader["uuid"]}'
-                            AND t.geom && '{leader["geom"]}'::geometry
-                            AND ST_Intersects(
-                                t.geom,
-                                '{leader["geom"]}'::geometry
-                            )
-                            AND (
-                                ST_Area(
-                                    ST_Intersection(
-                                        t.geom,
-                                        '{leader["geom"]}'::geometry
-                                    )
-                                )
-                                /
-                                NULLIF(
-                                    LEAST(
-                                        ST_Area(t.geom),
-                                        ST_Area('{leader["geom"]}'::geometry)
-                                    ),
-                                    0
-                                )
-                            ) >= 0.8
-                        )
-                );
-            """
-
-            outdb.execute(sql=sql_update, logger=self.logger)
-            outdb.commit()
-
-        self.logger.info(
-            f"geom_intersect_union finished successfully. "
-            f"Clusters created: {total_clusters}"
-        )
-
-    def tmp_to_final(self):
-        """Insert data from all temporary tables on tmp schema into the final table on public schema."""
+    
+    def unify_data(self):
+        """Insert data from all temporary tables on tmp schema into a single table on public schema."""
 
         outdb = self.get_database_facade()
         sql = f"""DO $$ DECLARE r RECORD;
                   BEGIN
                       FOR r IN (SELECT table_name FROM information_schema.tables WHERE table_schema='tmp' AND table_type='BASE TABLE') LOOP
-                          EXECUTE 'INSERT INTO public.{self.current_table} (geom, class_name, view_date, detection_date, area_km, tile_id) SELECT ST_Multi(ST_Transform(geometry,4674)), ''alerta'', view_date, "Date_dt"::date, (ST_Area((ST_Transform(geometry,4674))::geography))/1000000, tile_id FROM tmp.' || quote_ident(r.table_name);
+                          EXECUTE 'INSERT INTO public.{self.temp_table} (geom, class_name, view_date, detection_date, area_km, tile_id) SELECT ST_Multi(ST_Transform(geometry,4674)), ''alerta'', view_date, "Date_dt"::date, (ST_Area((ST_Transform(geometry,4674))::geography))/1000000, tile_id FROM tmp.' || quote_ident(r.table_name);
                       END LOOP;
                   END $$;"""
         outdb.execute(sql=sql, logger=self.logger)
         outdb.commit()
+           
+    def geom_intersect_union(self):
+        """Unifies all intersecting geometries into a single merged geometry."""
+        
+        outdb = self.get_database_facade()
+        sql = f"""
+            DELETE FROM public.{self.temp_table}
+            WHERE id NOT IN (
+                SELECT MIN(id)
+                FROM (
+                    SELECT
+                        id,
+                        ST_AsText(ST_SnapToGrid(geom, 0.000001)) AS geom_normalizada
+                    FROM public.{self.temp_table}
+                ) sub
+                GROUP BY geom_normalizada
+            );
+            """
+        outdb.execute(sql=sql, logger=self.logger)
+        outdb.commit()
 
+    def tmp_to_final(self):
+        """Insert data from the temporary table on public schema into the final table on public schema."""
+
+        outdb = self.get_database_facade()
+        sql = f"""INSERT INTO public.{self.current_table} (geom, class_name, view_date, detection_date, area_km, tile_id)
+                  SELECT geom, class_name, view_date, detection_date, area_km, tile_id FROM public.{self.temp_table};"""
+        outdb.execute(sql=sql, logger=self.logger)
+        outdb.commit()
+        
+    def truncate_temp_table(self):
+        """Truncate the temporary table on public schema."""
+
+        outdb = self.get_database_facade()
+        sql = f"""TRUNCATE TABLE public.{self.temp_table};"""
+        outdb.execute(sql=sql, logger=self.logger)
+        outdb.commit()
+    
     def drop_tmp_tables(self):
         """Drop all temporary tables on tmp schema."""
 
         outdb = self.get_database_facade()
-        sql = f"""DO $$ DECLARE r RECORD;
-                  BEGIN
-                      FOR r IN (SELECT table_name FROM information_schema.tables WHERE table_schema='tmp' AND table_type='BASE TABLE') LOOP
-                          EXECUTE 'DROP TABLE IF EXISTS tmp.' || quote_ident(r.table_name) || ' CASCADE';
-                      END LOOP;
-                  END $$;"""
-        outdb.execute(sql=sql, logger=self.logger)
-        outdb.commit()
+
+        get_tables_sql = """
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema = 'tmp'
+            AND table_type = 'BASE TABLE';
+        """
+
+        tables = outdb.fetchall(get_tables_sql)
+
+        for table in tables:
+            table_name = table[0]
+
+            try:
+                drop_sql = f'DROP TABLE IF EXISTS tmp."{table_name}"'
+
+                self.logger.info(f"Dropping table tmp.{table_name}")
+
+                outdb.execute(sql=drop_sql, logger=self.logger)
+
+                outdb.commit()
+
+            except Exception as e:
+                outdb.rollback()
+                self.logger.error(f"Error dropping tmp.{table_name}: {e}")
 
     def get_last_deter_date(self) -> date:
         """To get the latest date of DETER data loaded from the data source."""
