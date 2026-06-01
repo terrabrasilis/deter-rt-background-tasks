@@ -17,7 +17,7 @@ class HTTPDataChecker:
         
     def get_database(self) -> DatabaseFacade:
         if self.database is None:
-            self.database = OutputDatabase.get_database_facade(log_level=self.log_level)
+            self.database = OutputDatabase.get_database_facade()
         return self.database
 
     def has_new_data(self) -> bool:
