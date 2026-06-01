@@ -64,8 +64,12 @@ class HTTPDataSource:
         return self.client.check(remote_path=f"{remote_path_base}/{lock_file}")
     
     def verify_file_exists(self, output_db: DatabaseFacade, file_name: str) -> bool:
-        sql = f"""SELECT 1 FROM public.input_data WHERE file_name = '{file_name}' LIMIT 1;"""
-        return bool(output_db.fetchone(sql))
+        try:
+            sql = f"""SELECT 1 FROM public.input_data WHERE file_name = '{file_name}' LIMIT 1;"""
+            return bool(output_db.fetchone(sql))
+        except Exception as exc:
+            self.logger.error("Error while verifying if file already exists in control table.")
+            raise exc
 
     def make_shapefile_list(self, reference_date: date, output_db: DatabaseFacade) -> list[dict]:
         shp_files = []

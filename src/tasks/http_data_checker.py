@@ -30,7 +30,7 @@ class HTTPDataChecker:
                 reference_date = outputdb.get_max_date_input_file()
                 self.logger.debug(f"Reference date to check new data: {reference_date}")
 
-                ctrl_files=self.data_source.make_shapefile_list(reference_date=reference_date)
+                ctrl_files=self.data_source.make_shapefile_list(reference_date=reference_date, output_db=outputdb)
                 self.logger.debug(f"Found {len(ctrl_files)} new files on remote server.")
 
         except Exception as e:
