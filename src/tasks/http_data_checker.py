@@ -1,6 +1,7 @@
 from tasks.http_data_source import HTTPDataSource
 from utils.logger import TasksLogger
 from tasks.output_database import OutputDatabase
+from utils.database_facade import DatabaseFacade
 
 
 class HTTPDataChecker:
@@ -12,6 +13,12 @@ class HTTPDataChecker:
         self.logger.setLoggerLevel(level=log_level)
         self.logger.debug("Initializing HTTP Data Checker")
         self.data_source = HTTPDataSource(log_level=log_level)
+        self.database: DatabaseFacade = None
+        
+    def get_database(self) -> DatabaseFacade:
+        if self.database is None:
+            self.database = OutputDatabase.get_database_facade(log_level=self.log_level)
+        return self.database
 
     def has_new_data(self) -> bool:
         """
@@ -23,14 +30,17 @@ class HTTPDataChecker:
         lock_file="upload.lock"
         ctrl_files = []
         try:
-            if self.data_source.lock_file_exists(lock_file=lock_file):
-                self.logger.debug(f"Found {lock_file} on remote server. Abort.")
-            else:
+            # if self.data_source.lock_file_exists(lock_file=lock_file):
+            #     self.logger.debug(f"Found {lock_file} on remote server. Abort.")
+            # else:
                 outputdb = OutputDatabase(log_level=self.log_level)
+                
+                self.get_database()
+                
                 reference_date = outputdb.get_max_date_input_file()
                 self.logger.debug(f"Reference date to check new data: {reference_date}")
 
-                ctrl_files=self.data_source.make_shapefile_list(reference_date=reference_date, output_db=outputdb)
+                ctrl_files=self.data_source.make_shapefile_list(reference_date=reference_date, output_db=self.database)
                 self.logger.debug(f"Found {len(ctrl_files)} new files on remote server.")
 
         except Exception as e:
