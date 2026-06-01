@@ -30,9 +30,9 @@ class HTTPDataChecker:
         lock_file="upload.lock"
         ctrl_files = []
         try:
-            # if self.data_source.lock_file_exists(lock_file=lock_file):
-            #     self.logger.debug(f"Found {lock_file} on remote server. Abort.")
-            # else:
+            if self.data_source.lock_file_exists(lock_file=lock_file):
+                self.logger.debug(f"Found {lock_file} on remote server. Abort.")
+            else:
                 outputdb = OutputDatabase(log_level=self.log_level)
                 self.get_database(outputdb)
                 
