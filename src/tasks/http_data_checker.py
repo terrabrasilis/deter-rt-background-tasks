@@ -15,9 +15,9 @@ class HTTPDataChecker:
         self.data_source = HTTPDataSource(log_level=log_level)
         self.database: DatabaseFacade = None
         
-    def get_database(self) -> DatabaseFacade:
+    def get_database(self, output_db: OutputDatabase) -> DatabaseFacade:
         if self.database is None:
-            self.database = OutputDatabase.get_database_facade()
+            self.database = output_db.get_database_facade()
         return self.database
 
     def has_new_data(self) -> bool:
@@ -34,8 +34,7 @@ class HTTPDataChecker:
             #     self.logger.debug(f"Found {lock_file} on remote server. Abort.")
             # else:
                 outputdb = OutputDatabase(log_level=self.log_level)
-                
-                self.get_database()
+                self.get_database(outputdb)
                 
                 reference_date = outputdb.get_max_date_input_file()
                 self.logger.debug(f"Reference date to check new data: {reference_date}")
