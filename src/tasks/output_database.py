@@ -199,6 +199,7 @@ class OutputDatabase:
         
         outdb = self.get_database_facade()
         sql = f"""
+            -- remove duplicates inside the temp table (normalize geom)
             DELETE FROM public.{self.temp_table}
             WHERE id NOT IN (
                 SELECT MIN(id)
@@ -210,6 +211,13 @@ class OutputDatabase:
                 ) sub
                 GROUP BY geom_normalizada
             );
+
+            -- remove from temp any geometries that already exist in the final table
+            DELETE FROM public.{self.temp_table} t
+            USING public.{self.current_table} f
+            WHERE ST_AsText(ST_SnapToGrid(t.geom, 0.000001)) = ST_AsText(ST_SnapToGrid(f.geom, 0.000001))
+              AND t.view_date = f.view_date
+              AND t.tile_id = f.tile_id;
             """
         outdb.execute(sql=sql, logger=self.logger)
         outdb.commit()
