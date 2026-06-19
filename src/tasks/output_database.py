@@ -194,31 +194,40 @@ class OutputDatabase:
         outdb.execute(sql=sql, logger=self.logger)
         outdb.commit()
            
-    def geom_intersect_union(self):
-        """Unifies all intersecting geometries into a single merged geometry."""
-        
-        outdb = self.get_database_facade()
-        sql = f"""
-            -- remove duplicates inside the temp table (normalize geom)
-            DELETE FROM public.{self.temp_table}
-            WHERE id NOT IN (
-                SELECT MIN(id)
-                FROM (
-                    SELECT
-                        id,
-                        ST_AsText(ST_SnapToGrid(geom, 0.000001)) AS geom_normalizada
-                    FROM public.{self.temp_table}
-                ) sub
-                GROUP BY geom_normalizada
-            );
+    def remove_duplicate_geometries(self):
+        """
+        Remove duplicate geometries from the temporary table and
+        remove records that already exist in the final table.
+        """
 
-            -- remove from temp any geometries that already exist in the final table
-            DELETE FROM public.{self.temp_table} t
-            USING public.{self.current_table} f
-            WHERE ST_AsText(ST_SnapToGrid(t.geom, 0.000001)) = ST_AsText(ST_SnapToGrid(f.geom, 0.000001))
-              AND t.view_date = f.view_date
-              AND t.tile_id = f.tile_id;
-            """
+        outdb = self.get_database_facade()
+
+        sql = f"""
+                -- Remove duplicados dentro da temp table (geom + view_date)
+                DELETE FROM public.{self.temp_table} t
+                WHERE t.id NOT IN (
+                    SELECT MIN(id)
+                    FROM (
+                        SELECT
+                            id,
+                            ST_SnapToGrid(geom, 0.000001) AS geom_norm,
+                            view_date
+                        FROM public.{self.temp_table}
+                    ) sub
+                    GROUP BY geom_norm, view_date
+                );
+
+
+                -- Remove o que já existe no final (geom + view_date, IGNORANDO tile_id)
+                DELETE FROM public.{self.temp_table} t
+                USING public.{self.current_table} f
+                WHERE ST_Equals(
+                        ST_SnapToGrid(t.geom, 0.000001),
+                        ST_SnapToGrid(f.geom, 0.000001)
+                    )
+                AND t.view_date = f.view_date;
+        """
+
         outdb.execute(sql=sql, logger=self.logger)
         outdb.commit()
 

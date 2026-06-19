@@ -24,7 +24,7 @@ class DeterRTTransformer():
         try:
             self.__update_tmp_data()
             self.__unify_data()
-            self.__geom_intersect_union()
+            self.__remove_duplicate_geometries()
             self.__temp_to_final()
             self.__truncate_temp_table()
         except Exception as ex:
@@ -51,11 +51,13 @@ class DeterRTTransformer():
         outdb = OutputDatabase(log_level=self.log_level)
         outdb.unify_data()
             
-    def __geom_intersect_union(self):
-        """Unifies all intersecting geometries into a single merged geometry."""
+    def __remove_duplicate_geometries(self):
+        """Remove duplicate geometries from the temporary table and
+        remove records that already exist in the final table.
+        """
 
         outdb = OutputDatabase(log_level=self.log_level)
-        outdb.geom_intersect_union()
+        outdb.remove_duplicate_geometries()
 
     def __temp_to_final(self):
         """Insert data from all temporary tables on tmp schema into the final table on public schema."""
