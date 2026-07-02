@@ -412,10 +412,19 @@ class OutputDatabase:
         WHERE uuid NOT IN (SELECT uuid::uuid FROM public.{self.audited_table})
         AND view_date IN(
             SELECT file_date FROM public.input_data WHERE import_date=now()::date GROUP BY 1
-        );
+        )
+        AND created_at = now()::date
+        AND is_done = 0;
         """
         outdb.execute(sql=COPY_NON_AUDITED, logger=self.logger)
 
+        # Mark all records as validated ("is_done=1") in the main table to prevent them from being reused in the validation draw process.
+        UPDATE_IS_DONE = f"""
+        UPDATE public.{self.current_table} SET is_done=1 WHERE is_done=0;
+        """
+        # Update is_done to 1
+        outdb.execute(sql=UPDATE_IS_DONE, logger=self.logger)
+        self.logger.info(f"Mark all records as validated in the main table.")
 
         # the candidates by bigger areas
         CANDIDATES_BY_AREA = f"""
