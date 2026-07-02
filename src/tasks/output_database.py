@@ -31,9 +31,9 @@ class OutputDatabase:
         self.intermediary_table = "by_percentage_of_coverage"
         self.threshold = "0.5"  # 50%
         # the number of selected candidates by bigger areas
-        self.limit_bigger_area = "100"
+        self.limit_bigger_area = "50"
         # the number of randomly selected candidates
-        self.limit_random = "100"
+        self.limit_random = "50"
 
     def get_sqlalchemy_engine(self):
         """Gets the connection engine base on SqlAlchemy to use in GeoPandas"""
