@@ -413,8 +413,7 @@ class OutputDatabase:
         AND view_date IN(
             SELECT file_date FROM public.input_data WHERE import_date=now()::date GROUP BY 1
         )
-        AND created_at = now()::date
-        AND is_done = 0;
+        AND created_at = now()::date;
         """
         outdb.execute(sql=COPY_NON_AUDITED, logger=self.logger)
 
@@ -439,18 +438,44 @@ class OutputDatabase:
         outdb.execute(sql=CANDIDATES_BY_AREA, logger=self.logger)
         self.logger.info(f"Define the first {self.limit_bigger_area} candidates")
 
+        # one candidate (largest area) per tile not yet represented among the selected candidates
+        CANDIDATES_BY_TILE = f"""
+        UPDATE public.{self.audited_table}
+        SET auditar=1
+        WHERE uuid IN (
+            SELECT uuid FROM (
+                SELECT uuid,
+                    ROW_NUMBER() OVER (PARTITION BY tile_id ORDER BY area_km DESC) as rn
+                FROM public.{self.audited_table}
+                WHERE auditar IS NULL
+                  AND datafim_avaliador1 IS NULL
+                  AND tile_id NOT IN (
+                      SELECT DISTINCT tile_id
+                      FROM public.{self.audited_table}
+                      WHERE auditar = 1 AND created_at = now()::date
+                  )
+            ) sub
+            WHERE rn = 1
+        );
+        """
+        tile_count = outdb.execute(sql=CANDIDATES_BY_TILE, logger=self.logger)
+        self.logger.info(f"Define 1 candidate per unrepresented tile ({tile_count} selected)")
+
+        # adjust random limit to compensate for tile-based selections
+        adjusted_limit_random = max(int(self.limit_random) - tile_count, 0)
+
         # the candidates by random
         CANDIDATES_BY_RANDOM = f"""
         UPDATE public.{self.audited_table}
         SET auditar=1
         WHERE uuid IN (
             SELECT uuid FROM public.{self.audited_table}
-            WHERE auditar IS NULL AND datafim_avaliador1 IS NULL ORDER BY random() LIMIT {self.limit_random}
+            WHERE auditar IS NULL AND datafim_avaliador1 IS NULL ORDER BY random() LIMIT {adjusted_limit_random}
         );
         """
-        # Update audit to 1 to the random limit_random candidates
+        # Update audit to 1 to the random adjusted_limit_random candidates
         outdb.execute(sql=CANDIDATES_BY_RANDOM, logger=self.logger)
-        self.logger.info(f"Define the random {self.limit_random} candidates")
+        self.logger.info(f"Define the random {adjusted_limit_random} candidates")
 
         # delete any that are still null after applying the rules
         ANYONE_STILL_NULL = f"""
